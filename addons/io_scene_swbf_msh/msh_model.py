@@ -2,7 +2,7 @@
     saved to a .msh file. """
 
 from dataclasses import dataclass, field
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from enum import Enum
 from mathutils import Vector, Quaternion
 
@@ -18,12 +18,18 @@ class ModelType(Enum):
     # CHILDSKIN = 5 # I didnt bother with these, never encountered one and they might need adjustments to vertex data
     SHADOWVOLUME = 6 # Pretty common
 
+
 class CollisionPrimitiveShape(Enum):
     SPHERE = 0
     ELLIPSOID = 1
     CYLINDER = 2
     MESH = 3
     BOX = 4
+
+class ClothCollisionPrimitiveShape(Enum):
+    SPHERE = 0
+    CYLINDER = 1
+    BOX = 2
 
 @dataclass
 class ModelTransform:
@@ -32,12 +38,14 @@ class ModelTransform:
     translation: Vector = field(default_factory=Vector)
     rotation: Quaternion = field(default_factory=Quaternion)
 
+
 @dataclass
 class VertexWeight:
     """ Class representing a vertex weight in a .msh file. """
 
     weight: float = 1.0
     bone: int = 0
+
 
 @dataclass
 class GeometrySegment:
@@ -60,11 +68,38 @@ class GeometrySegment:
 @dataclass
 class CollisionPrimitive:
     """ Class representing a 'SWCI' section in a .msh file. """
-
     shape: CollisionPrimitiveShape = CollisionPrimitiveShape.SPHERE
     radius: float = 0.0
     height: float = 0.0
     length: float = 0.0
+
+
+@dataclass 
+class ClothCollisionPrimitive:
+    """ Class representing a 'COLL' section item in a .msh file. """
+    name: str = ""
+    parent_name: str = ""
+    shape: ClothCollisionPrimitiveShape = ClothCollisionPrimitiveShape.SPHERE
+    radius: float = 0.0
+    height: float = 0.0
+    length: float = 0.0
+
+
+@dataclass
+class Cloth:
+    """ Represents a cloth object from a CLTH chunk. """
+    name: str = ""
+    texture: str = ""
+    positions: List[Vector] = field(default_factory=list)
+    uvs: List[Vector] = field(default_factory=list)
+    triangles: List[List[int]] = field(default_factory=list)
+    fixed_points: List[int] = field(default_factory=list)
+    fixed_weights_bones: List[str] = field(default_factory=list)
+    stretch_constraints: List[List[int]] = field(default_factory=list)
+    cross_constraints: List[List[int]] = field(default_factory=list)
+    bend_constraints: List[List[int]] = field(default_factory=list)
+    collision_objects: List['ClothCollisionPrimitive'] = field(default_factory=list)
+    
 
 @dataclass
 class Model:
@@ -81,6 +116,9 @@ class Model:
 
     geometry: List[GeometrySegment] = None
     collisionprimitive: CollisionPrimitive = None
+    
+    cloth_collision_primitive: ClothCollisionPrimitive = None
+    cloth: Optional[Cloth] = None
 
 
 @dataclass
