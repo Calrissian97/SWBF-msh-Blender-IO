@@ -1,17 +1,14 @@
 """ Contains functions for extracting a scene from a .msh file"""
 
+import os
 from itertools import islice
 from typing import Dict
 from .msh_scene import Scene
 from .msh_model import *
 from .msh_material import *
 from .msh_utilities import *
-
 from .crc import *
-
 from .chunked_file_reader import Reader
-
-
 
 # Current model position
 model_counter = 0
@@ -22,6 +19,8 @@ mndx_remap : Dict[int, int]  = {}
 # How much to print
 debug_level = 0
 
+# List for materials discovered outside of the main MATL chunk (i.e. cloth)
+_cloth_materials: List[Material] = []
 
 '''
 Debug levels just indicate how much info should be printed.
@@ -33,6 +32,9 @@ def read_scene(input_file, anim_only=False, debug=0) -> Scene:
 
     global debug_level
     debug_level = debug
+
+    global _cloth_materials
+    _cloth_materials = []
 
     scene = Scene()
     scene.models = []
@@ -94,6 +96,12 @@ def read_scene(input_file, anim_only=False, debug=0) -> Scene:
                 else:
                     hedr.skip_bytes(1)
 
+    # Add any cloth materials that were discovered
+    for mat in _cloth_materials:
+        if mat.name not in scene.materials:
+            scene.materials[mat.name] = mat
+
+
     # Print models in skeleton
     if scene.skeleton and debug_level > 0:
         print("Skeleton models: ")
@@ -110,7 +118,6 @@ def read_scene(input_file, anim_only=False, debug=0) -> Scene:
     change its index to directly reference its bone's index.  
     It will reference the MNDX of its bone's MODL by default.
     '''
-    
     for model in scene.models:
         if model.geometry:
             for seg in model.geometry:
@@ -135,7 +142,6 @@ def _read_matl_and_get_materials_list(matl: Reader) -> List[Material]:
             materials_list.append(_read_matd(matd))
 
     return materials_list
-
 
 
 def _read_matd(matd: Reader) -> Material:
@@ -249,7 +255,13 @@ def _read_modl(modl: Reader, materials_list: List[Material]) -> Model:
                     
                     elif next_header_geom == "CLTH":
                         with geom.read_child() as clth:
-                            pass
+                            model.cloth = _read_clth(clth, model.name)
+                            # If the cloth has a texture, create a material for it and add it to the scene
+                            # so it can be processed like any other material.
+                            if model.cloth and model.cloth.texture:
+                                global _cloth_materials
+                                mat_name = os.path.splitext(model.cloth.texture)[0]
+                                _cloth_materials.append(Material(name=mat_name, texture0=model.cloth.texture))
                     
                     else:
                         geom.skip_bytes(1)
@@ -273,6 +285,81 @@ def _read_modl(modl: Reader, materials_list: List[Material]) -> Model:
             modl.skip_bytes(1)
 
     return model
+
+
+def _read_clth(clth_reader: Reader, model_name: str) -> Cloth:
+    """ Reads a CLTH chunk and its children. """
+    cloth = Cloth()
+    cloth.name = model_name
+
+    while clth_reader.could_have_child():
+        header = clth_reader.peak_next_header()
+
+        if header == "CTEX":
+            with clth_reader.read_child() as ctex:
+                cloth.texture = ctex.read_string()
+
+        elif header == "CPOS":
+            with clth_reader.read_child() as cpos:
+                count = cpos.read_u32()
+                cloth.positions = [cpos.read_vec() for _ in range(count)]
+
+        elif header == "CUV0":
+            with clth_reader.read_child() as cuv0:
+                count = cuv0.read_u32()
+                # UVs are 2D, but we can store them in a Vector for consistency
+                cloth.uvs = [Vector(cuv0.read_f32(2)) for _ in range(count)]
+
+        elif header == "CMSH":
+            with clth_reader.read_child() as cmsh:
+                count = cmsh.read_u32()
+                cloth.triangles = [cmsh.read_u32(3) for _ in range(count)]
+
+        elif header == "FIDX":
+            with clth_reader.read_child() as fidx:
+                count = fidx.read_u32()
+                cloth.fixed_points = [fidx.read_u32() for _ in range(count)]
+
+        elif header == "FWGT":
+            with clth_reader.read_child() as fwgt:
+                count = fwgt.read_u32()
+                # This chunk contains null-terminated strings for bone names
+                bone_names = []
+                for _ in range(count):
+                    bone_names.append(fwgt.read_string())
+                cloth.fixed_weights_bones = bone_names
+
+        elif header == "SPRS":
+            with clth_reader.read_child() as sprs:
+                count = sprs.read_u32()
+                cloth.stretch_constraints = [sprs.read_u16(2) for _ in range(count)]
+
+        elif header == "CPRS":
+            with clth_reader.read_child() as cprs:
+                count = cprs.read_u32()
+                cloth.cross_constraints = [cprs.read_u16(2) for _ in range(count)]
+
+        elif header == "BPRS":
+            with clth_reader.read_child() as bprs:
+                count = bprs.read_u32()
+                cloth.bend_constraints = [bprs.read_u16(2) for _ in range(count)]
+
+        elif header == "COLL":
+            with clth_reader.read_child() as coll:
+                count = coll.read_u32()
+                for _ in range(count):
+                    name = coll.read_string()
+                    parent = coll.read_string()
+                    shape = ClothCollisionPrimitiveShape(coll.read_u32())
+                    radius = coll.read_f32()
+                    height = coll.read_f32()
+                    length = coll.read_f32()
+                    cloth.collision_objects.append(ClothCollisionPrimitive(name, parent, shape, radius, height, length))
+
+        else:
+            clth_reader.skip_bytes(1)
+
+    return cloth
 
 
 def _read_tran(tran: Reader) -> ModelTransform:
@@ -411,7 +498,6 @@ def _read_segm(segm: Reader, materials_list: List[Material]) -> GeometrySegment:
     return geometry_seg
 
 
-
 def _read_anm2(anm2: Reader) -> Animation:
 
     anim = Animation()
@@ -467,6 +553,3 @@ def _read_anm2(anm2: Reader) -> Animation:
             anm2.skip_bytes(1)
 
     return anim
-
-
-
