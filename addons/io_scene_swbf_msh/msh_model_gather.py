@@ -1,6 +1,8 @@
 """ Gathers the Blender objects from the current scene and returns them as a list of
     Model objects. """
 
+import ast
+import os
 import bpy
 import math
 from enum import Enum
@@ -113,6 +115,11 @@ def gather_models(apply_modifiers: bool, export_target: str, skeleton_only: bool
 
         if obj.type in MESH_OBJECT_TYPES and not skeleton_only:
 
+            if model.model_type == ModelType.CLOTH:
+                model.cloth = cloth_from_object(obj)
+                # Cloth models do not have standard geometry segments
+                model.geometry = None
+
             # Vertex groups are often used for purposes other than skinning.
             # Here we gather all vgroups and select the ones that reference
             # objects included in the export.
@@ -122,20 +129,23 @@ def gather_models(apply_modifiers: bool, export_target: str, skeleton_only: bool
                 valid_vgroup_indices = { group.index for group in valid_vgroups }
                 model.bone_map = [ group.name for group in valid_vgroups ]
 
-            mesh = obj.to_mesh()
-            model.geometry = create_mesh_geometry(mesh, valid_vgroup_indices)
+            if model.model_type != ModelType.CLOTH:
+                mesh = obj.to_mesh()
+                model.geometry = create_mesh_geometry(mesh, valid_vgroup_indices)
 
             obj.to_mesh_clear()
 
             _, _, world_scale = obj.matrix_world.decompose()
             world_scale = convert_scale_space(world_scale)
-            scale_segments(world_scale, model.geometry)
-                
-            for segment in model.geometry:
-                if len(segment.positions) > MAX_MSH_VERTEX_COUNT:
-                    raise RuntimeError(f"Object '{obj.name}' has resulted in a .msh geometry segment that has "
-                                       f"more than {MAX_MSH_VERTEX_COUNT} vertices! Split the object's mesh up "
-                                       f"and try again!")
+            if model.geometry:
+                scale_segments(world_scale, model.geometry)
+
+            if model.geometry:
+                for segment in model.geometry:
+                    if len(segment.positions) > MAX_MSH_VERTEX_COUNT:
+                        raise RuntimeError(f"Object '{obj.name}' has resulted in a .msh geometry segment that has "
+                                           f"more than {MAX_MSH_VERTEX_COUNT} vertices! Split the object's mesh up "
+                                           f"and try again!")
 
         if get_is_collision_primitive(obj):
             model.collisionprimitive = get_collision_primitive(obj)
@@ -149,6 +159,214 @@ def gather_models(apply_modifiers: bool, export_target: str, skeleton_only: bool
     return (models_list + list(pure_bones_from_armature.values()), armature_found)
 
 
+def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
+    """ Gathers cloth data from a Blender mesh object. """
+    if blender_obj.type != 'MESH':
+        return None
+
+    cloth = Cloth()
+    mesh = blender_obj.data
+
+    # Get texture from the first material slot's custom properties
+    if mesh.materials and mesh.materials[0] and hasattr(mesh.materials[0], 'swbf_msh_mat'):
+        mat_props = mesh.materials[0].swbf_msh_mat
+        if mat_props.diffuse_map:
+            cloth.texture = os.path.basename(mat_props.diffuse_map)
+
+    # Get vertex positions (converted to SWBF coordinate space)
+    cloth.positions = [convert_vector_space(v.co) for v in mesh.vertices]
+
+    # Get UVs from the active UV layer
+    if mesh.uv_layers.active:
+        uv_layer = mesh.uv_layers.active.data
+        # Initialize UV list with correct size
+        cloth.uvs = [[0.0, 0.0]] * len(mesh.vertices)
+        # Use loops to find the UV for each vertex
+        for poly in mesh.polygons:
+            for loop_index in poly.loop_indices:
+                loop = mesh.loops[loop_index]
+                vert_index = loop.vertex_index
+                cloth.uvs[vert_index] = list(uv_layer[loop_index].uv)
+
+    # Get triangles
+    mesh.calc_loop_triangles()
+    cloth.triangles = [[tri.vertices[0], tri.vertices[1], tri.vertices[2]] for tri in mesh.loop_triangles]
+
+    # Get pinned vertices and their bone weights from vertex groups
+    pin_group = blender_obj.vertex_groups.get("Pin")
+    if pin_group:
+        pinned_verts = {}  # Dict of {vertex_index: bone_name}
+        for v in mesh.vertices:
+            is_pinned = any(g.group == pin_group.index and g.weight > 0.5 for g in v.groups)
+            if is_pinned:
+                bone_name = None
+                highest_weight = 0.0
+                for g2 in v.groups:
+                    group_name = blender_obj.vertex_groups[g2.group].name
+                    if group_name != "Pin" and g2.weight > highest_weight:
+                        highest_weight = g2.weight
+                        bone_name = group_name
+                if bone_name:
+                    pinned_verts[v.index] = bone_name
+
+        if pinned_verts:
+            sorted_pins = sorted(pinned_verts.items())
+            cloth.fixed_points = [item[0] for item in sorted_pins]
+            cloth.fixed_weights_bones = [item[1] for item in sorted_pins]
+
+    # Get collision primitives for this cloth
+    raw = blender_obj.get("swbf_msh_cloth_collisions", "[]")
+
+    try:
+        names = ast.literal_eval(raw)  # ['Cube', 'Sphere', 'Cylinder']
+    except (ValueError, SyntaxError):
+        names = []
+
+    # Clear internal list of collision_objects (Might have changed)
+    cloth.collision_objects = []
+
+    for name in names:
+        if name in bpy.context.scene.objects:
+            obj = bpy.context.scene.objects[name]
+            prim = get_cloth_collision_primitive(obj)
+            prim.name = obj.name
+
+            if obj.parent.name == "skeleton":
+                prim.parent_name = obj.parent_bone
+            else:
+                prim.parent_name = obj.parent.name
+            
+            cloth.collision_objects.append(prim)
+
+    # If empty swbf_msh_cloth_collisions property, search entire scene
+    if not names:
+        for obj in bpy.context.scene.objects:
+            if get_is_cloth_collision_primitive(obj):
+                coll_prim = get_cloth_collision_primitive(obj)
+                # The primitive needs its name and parent name for the COLL chunk
+                coll_prim.name = obj.name
+
+            if obj.parent.name == "skeleton":
+                prim.parent_name = obj.parent_bone
+            else:
+                prim.parent_name = obj.parent.name
+                
+                cloth.collision_objects.append(coll_prim)
+
+    # Recalculate constraints
+    stretch_constraints = set()
+    cross_constraints = set()
+    bend_constraints = set()
+
+    fixed_point_set = set(cloth.fixed_points)
+
+    def is_fixed(idx):
+        return idx in fixed_point_set
+
+    polygons = mesh.polygons
+
+    # Build a map of vertex to polygons it belongs to
+    vert_to_poly_map = {i: [] for i in range(len(mesh.vertices))}
+    for i, poly in enumerate(polygons):
+        for vert_idx in poly.vertices:
+            vert_to_poly_map[vert_idx].append(i)
+
+    for i, face in enumerate(polygons):
+        # Stretch constraints
+        # p1-p2, p2-p3, p3-p4, p4-p1
+        # This allows for any amount of sides to the polygon
+        last_vert_idx = face.vertices[-1]
+        for vert_idx in face.vertices:
+            if is_fixed(vert_idx) and is_fixed(last_vert_idx):
+                last_vert_idx = vert_idx
+                continue
+
+            constraint = tuple(sorted((last_vert_idx, vert_idx)))
+            stretch_constraints.add(constraint)
+            last_vert_idx = vert_idx
+
+        # Cross constraints, diagonally across _quads_
+        # Only works for quads currently
+        if len(face.vertices) == 4:
+            v = face.vertices
+            pair_1 = (v[0], v[2])
+            pair_2 = (v[1], v[3])
+
+            # Only add constraint if either or both vertices are dynamic
+            if not (is_fixed(pair_1[0]) and is_fixed(pair_1[1])):
+                cross_constraints.add(tuple(sorted(pair_1)))
+
+            if not (is_fixed(pair_2[0]) and is_fixed(pair_2[1])):
+                cross_constraints.add(tuple(sorted(pair_2)))
+
+    # Bend constraints
+    for i, face1 in enumerate(polygons):
+        for j, face2 in enumerate(polygons):
+            if i >= j:  # Process each pair of faces only once
+                continue
+            shared_vertices_indices = list(set(face1.vertices) & set(face2.vertices))
+
+            # Bend constraints are typically between two faces sharing an edge (2 shared vertices)
+            if len(shared_vertices_indices) != 2:
+                continue
+
+            # Find the vertices in each face that are NOT shared
+            face1_non_shared = [v for v in face1.vertices if v not in shared_vertices_indices]
+            face2_non_shared = [v for v in face2.vertices if v not in shared_vertices_indices]
+
+            # The reference logic connects vertices that are "opposite" the shared edge.
+            # For two adjacent triangles, this is simple. For quads, it's more complex,
+            # but this pairing should cover the common cases.
+            # We connect each non-shared vertex of face1 to each non-shared vertex of face2.
+            for v1 in face1_non_shared:
+                for v2 in face2_non_shared:
+                    # Skip if both vertices are fixed
+                    if is_fixed(v1) and is_fixed(v2):
+                        continue
+
+                    constraint = tuple(sorted((v1, v2)))
+
+                    # Check for duplicates before adding
+                    if constraint in bend_constraints:
+                        continue
+
+                    # A simple check to avoid creating constraints that are too long,
+                    # which can happen with non-standard topology. This helps ensure
+                    # we are only connecting "nearby" opposite vertices.
+                    if len(face1.vertices) > 3 or len(face2.vertices) > 3:
+                         if (v1,v2) in stretch_constraints or (v2,v1) in stretch_constraints:
+                            continue
+
+                    bend_constraints.add(constraint)
+
+    # Check if the mesh has been edited by comparing topology signatures.
+    current_signature = f"{len(mesh.vertices)}:{len(mesh.edges)}:{len(mesh.polygons)}"
+    original_signature = blender_obj.get("swbf_msh_cloth_mesh_signature", "")
+    mesh_is_unedited = (current_signature == original_signature)
+
+    # If recalculation failed AND the mesh is unedited, fall back to imported data.
+    if (not cross_constraints or not bend_constraints) and mesh_is_unedited:
+        if "swbf_msh_cloth_cross_constraints" in blender_obj:
+            try:
+                cloth.stretch_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_stretch_constraints"])
+                cloth.cross_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_cross_constraints"])
+                cloth.bend_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_bend_constraints"])
+                return cloth # Return early as we are using original data
+            except (ValueError, SyntaxError):
+                # If parsing fails, proceed to use the (empty) recalculated values
+                pass
+
+    # Otherwise, always use the newly calculated constraints.
+    # This path is taken if:
+    # 1. Recalculation was successful.
+    # 2. The mesh was edited (we must use new values).
+    # 3. Fallback failed due to missing or corrupt custom properties.
+        cloth.stretch_constraints = [list(item) for item in stretch_constraints]
+        cloth.cross_constraints = [list(item) for item in cross_constraints]
+        cloth.bend_constraints = [list(item) for item in bend_constraints]
+
+    return cloth
+
 
 def create_parents_set() -> Set[str]:
     """ Creates a set with the names of the Blender objects from the current scene
@@ -161,6 +379,7 @@ def create_parents_set() -> Set[str]:
             parents.add(obj.parent.name)
 
     return parents
+
 
 def create_mesh_geometry(mesh: bpy.types.Mesh, valid_vgroup_indices: Set[int]) -> List[GeometrySegment]:
     """ Creates a list of GeometrySegment objects from a Blender mesh.
@@ -187,6 +406,7 @@ def create_mesh_geometry(mesh: bpy.types.Mesh, valid_vgroup_indices: Set[int]) -
     for segment, material in zip(segments, mesh.materials):
         segment.material_name = material.name
 
+
     def add_vertex(material_index: int, vertex_index: int, loop_index: int) -> int:
         nonlocal segments, vertex_remap
 
@@ -197,6 +417,7 @@ def create_mesh_geometry(mesh: bpy.types.Mesh, valid_vgroup_indices: Set[int]) -
 
         # always use loop normals since we always calculate a custom split set        
         vertex_normal = Vector( mesh.loops[loop_index].normal )
+
 
         def get_cache_vertex():
             yield mesh.vertices[vertex_index].co.x
@@ -271,8 +492,13 @@ def create_mesh_geometry(mesh: bpy.types.Mesh, valid_vgroup_indices: Set[int]) -
 
     return segments
 
+
 def get_model_type(obj: bpy.types.Object, armature_found: bpy.types.Object) -> ModelType:
     """ Get the ModelType for a Blender object. """
+
+    # A cloth object is identified by its "Pin" vertex group and the custom properties we added on import.
+    if obj.vertex_groups.get("Pin") and "swbf_msh_cloth_stretch_constraints" in obj:
+        return ModelType.CLOTH
 
     if obj.type in MESH_OBJECT_TYPES:
         # Objects can have vgroups for non-skinning purposes.
@@ -298,6 +524,7 @@ def get_model_type(obj: bpy.types.Object, armature_found: bpy.types.Object) -> M
             return ModelType.STATIC
 
     return ModelType.NULL
+
 
 def get_is_model_hidden(obj: bpy.types.Object) -> bool:
     """ Gets if a Blender object should be marked as hidden in the .msh file. """
@@ -330,12 +557,22 @@ def get_is_model_hidden(obj: bpy.types.Object) -> bool:
 
     return False
 
+
 def get_is_collision_primitive(obj: bpy.types.Object) -> bool:
     """ Gets if a Blender object represents a collision primitive. """
 
     name = obj.name.lower()
 
     return name.startswith("p_")
+
+
+def get_is_cloth_collision_primitive(obj: bpy.types.Object) -> bool:
+    """ Gets if a Blender object represents a collision primitive. """
+
+    name = obj.name.lower()
+
+    return name.startswith("c_")
+
 
 def get_collision_primitive(obj: bpy.types.Object) -> CollisionPrimitive:
     """ Gets the CollisionPrimitive of an object or raises an error if
@@ -363,6 +600,30 @@ def get_collision_primitive(obj: bpy.types.Object) -> CollisionPrimitive:
     return primitive
 
 
+def get_cloth_collision_primitive(obj: bpy.types.Object) -> ClothCollisionPrimitive:
+    """ Gets the ClothCollisionPrimitive of an object or raises an error if
+        it can't. """
+
+    primitive = ClothCollisionPrimitive()
+    primitive.shape = get_cloth_collision_primitive_shape(obj)
+
+    if primitive.shape == ClothCollisionPrimitiveShape.SPHERE:
+        # Tolerate a 5% difference to account for icospheres with 2 subdivisions.
+        if not (math.isclose(obj.dimensions[0], obj.dimensions[1], rel_tol=0.05) and
+                math.isclose(obj.dimensions[0], obj.dimensions[2], rel_tol=0.05)):
+            raise RuntimeError(f"Object '{obj.name}' is being used as a sphere collision "
+                               f"primitive but it's dimensions are not uniform!")
+
+        primitive.radius = max(obj.dimensions[0], obj.dimensions[1], obj.dimensions[2]) * 0.5
+    elif primitive.shape == ClothCollisionPrimitiveShape.CYLINDER:
+        primitive.radius = max(obj.dimensions[0], obj.dimensions[1]) * 0.5
+        primitive.height = obj.dimensions[2]
+    elif primitive.shape == ClothCollisionPrimitiveShape.BOX:
+        primitive.radius = obj.dimensions[0] * 0.5
+        primitive.height = obj.dimensions[2] * 0.5
+        primitive.length = obj.dimensions[1] * 0.5
+
+    return primitive
 
 
 def get_collision_primitive_shape(obj: bpy.types.Object) -> CollisionPrimitiveShape:
@@ -389,6 +650,188 @@ def get_collision_primitive_shape(obj: bpy.types.Object) -> CollisionPrimitiveSh
     raise RuntimeError(f"Object '{obj.name}' has no primitive type specified in it's name!")
 
 
+def get_cloth_collision_primitive_shape(obj: bpy.types.Object) -> ClothCollisionPrimitiveShape:
+    """ Gets the ClothCollisionPrimitiveShape of an object or raises an error if
+        it can't. """
+
+    name = obj.name.lower()
+
+    # The easy but unlikely way
+    if "sphere" in name or "sphr" in name or "spr" in name:
+        return ClothCollisionPrimitiveShape.SPHERE
+    if "cylinder" in name or "cyln" in name or "cyl" in name:
+        return ClothCollisionPrimitiveShape.CYLINDER
+    if "box" in name or "cube" in name or "cuboid" in name:
+        return ClothCollisionPrimitiveShape.BOX
+
+    # Make a guess as to shape from geometry
+    mesh = obj.data
+    vcount = len(mesh.vertices)
+    fcount = len(mesh.polygons)
+    
+    # Blender uvspheres
+    if vcount == 482 and fcount == 512:
+        return ClothCollisionPrimitiveShape.SPHERE
+
+    #Blender icospheres
+    if vcount == 42 and fcount == 80:
+        return ClothCollisionPrimitiveShape.SPHERE
+    
+    # Blender cylinders
+    if vcount == 64 and fcount == 124:
+        return ClothCollisionPrimitiveShape.CYLINDER
+
+    # XSI Spheres (original and imported/triangulated plus odd varieties found in stock models)
+    if vcount == 58 and fcount == 64 or vcount == 58 and fcount == 112 or vcount == 282 and fcount == 760 or vcount == 554 and fcount == 1104:
+        return ClothCollisionPrimitiveShape.SPHERE
+    
+    # XSI cylinders (original and imported/triangulated)
+    if vcount == 42 and fcount == 48 or vcount == 58 and fcount == 80 or vcount == 14 and fcount == 24:
+        return ClothCollisionPrimitiveShape.CYLINDER
+    
+    # XSI and Blender boxes (original and imported/triangulated)
+    if vcount == 8 and fcount == 6 or vcount == 8 and fcount == 12:
+        return ClothCollisionPrimitiveShape.BOX
+    
+    # Last resort, heuristic calculation
+    # Sphere
+    DIST_STD_RATIO_THRESH = 0.03
+
+    # gather verts in object space
+    verts = [v.co for v in mesh.vertices]
+    V = len(verts)
+    if V == 0:
+        raise RuntimeError(f"Object '{obj.name}' has no geometry!")
+
+    # centroid
+    cx = sum(v.x for v in verts) / V
+    cy = sum(v.y for v in verts) / V
+    cz = sum(v.z for v in verts) / V
+
+    # distances and population stddev
+    dists = []
+    for v in verts:
+        dx = v.x - cx; dy = v.y - cy; dz = v.z - cz
+        dists.append(math.sqrt(dx*dx + dy*dy + dz*dz))
+    mean_d = sum(dists) / V
+    var_d = sum((d - mean_d) ** 2 for d in dists) / V
+    std_d = math.sqrt(var_d)
+    dist_std_ratio = std_d / mean_d if mean_d else float('inf')
+    is_sphere = dist_std_ratio <= DIST_STD_RATIO_THRESH
+
+    if is_sphere:
+        return ClothCollisionPrimitiveShape.SPHERE
+    
+    # Cube
+    DIM_EQUAL_TOL = 0.03    # relative tolerance for dx,dy,dz equality
+    PLANE_TOL_FRAC = 0.02   # tolerance as fraction of max half-extent
+    MIN_FACE_VERTEX_RATIO = 0.95
+
+    # gather verts
+    verts = [v.co for v in mesh.vertices]
+    V = len(verts)
+    if V == 0:
+        raise RuntimeError(f"Object '{obj.name}' has no geometry!")
+
+    # axis-aligned bbox and center (object space)
+    xs = [v.x for v in verts]; ys = [v.y for v in verts]; zs = [v.z for v in verts]
+    minx, maxx = min(xs), max(xs); miny, maxy = min(ys), max(ys); minz, maxz = min(zs), max(zs)
+    dx, dy, dz = maxx - minx, maxy - miny, maxz - minz
+    mean_dim = (dx + dy + dz) / 3.0
+    dims_equal = (abs(dx - mean_dim) / mean_dim <= DIM_EQUAL_TOL and
+                abs(dy - mean_dim) / mean_dim <= DIM_EQUAL_TOL and
+                abs(dz - mean_dim) / mean_dim <= DIM_EQUAL_TOL)
+
+    cx, cy, cz = (minx + maxx) / 2.0, (miny + maxy) / 2.0, (minz + maxz) / 2.0
+    hx, hy, hz = dx / 2.0, dy / 2.0, dz / 2.0
+    plane_tol = max(hx, hy, hz) * PLANE_TOL_FRAC
+
+    # count vertices that lie on one of the six face planes (within tolerance)
+    face_count = 0
+    for v in verts:
+        on_x_face = abs(abs(v.x - cx) - hx) <= plane_tol
+        on_y_face = abs(abs(v.y - cy) - hy) <= plane_tol
+        on_z_face = abs(abs(v.z - cz) - hz) <= plane_tol
+        if on_x_face or on_y_face or on_z_face:
+            face_count += 1
+
+    face_ratio = face_count / V
+    is_box = dims_equal and (face_ratio >= MIN_FACE_VERTEX_RATIO)
+
+    if is_box:
+        return ClothCollisionPrimitiveShape.BOX
+    
+    # Cylinder
+    RAD_STD_RATIO_THRESH = 0.05   # radial stddev / mean
+    CAP_VERTEX_RATIO = 0.20       # fraction of verts on caps (each cap)
+    CAP_TOL_FRAC = 0.02           # tolerance relative to half-height for cap detection
+    MIN_HEIGHT_TO_RADIUS = 0.6    # height should be at least this multiple of radius (avoid flat discs)
+
+    # gather verts in object space
+    verts = [v.co for v in mesh.vertices]
+    V = len(verts)
+    if V == 0:
+        raise RuntimeError(f"Object '{obj.name}' has no geometry!")
+
+    # axis-aligned bbox to pick cylinder axis (largest extent)
+    xs = [v.x for v in verts]; ys = [v.y for v in verts]; zs = [v.z for v in verts]
+    minx, maxx = min(xs), max(xs); miny, maxy = min(ys), max(ys); minz, maxz = min(zs), max(zs)
+    dx, dy, dz = maxx - minx, maxy - miny, maxz - minz
+    # choose axis index: 0=x,1=y,2=z
+    if dx >= dy and dx >= dz:
+        axis = 0; min_a, max_a = minx, maxx
+    elif dy >= dx and dy >= dz:
+        axis = 1; min_a, max_a = miny, maxy
+    else:
+        axis = 2; min_a, max_a = minz, maxz
+
+    # center and half-height
+    center_a = (min_a + max_a) / 2.0
+    half_h = (max_a - min_a) / 2.0
+    cap_tol = max(half_h, 1e-6) * CAP_TOL_FRAC
+
+    # compute radial distances from chosen axis and cap membership
+    rads = []
+    cap_count = 0
+    for v in verts:
+        if axis == 0:
+            a = v.x - center_a
+            ox, oy = v.y, v.z
+        elif axis == 1:
+            a = v.y - center_a
+            ox, oy = v.x, v.z
+        else:
+            a = v.z - center_a
+            ox, oy = v.x, v.y
+        r = math.hypot(ox, oy)
+        rads.append(r)
+        if abs(abs(a) - half_h) <= cap_tol:
+            cap_count += 1
+
+    # radial stats (population stddev)
+    mean_r = sum(rads) / V
+    var_r = sum((r - mean_r) ** 2 for r in rads) / V
+    std_r = math.sqrt(var_r)
+    rad_std_ratio = std_r / mean_r if mean_r else float('inf')
+
+    # cap ratio (both caps combined)
+    cap_ratio = cap_count / V
+
+    # simple height vs radius check (avoid detecting discs as cylinders)
+    height = 2.0 * half_h
+    radius = mean_r
+    height_radius_ok = (radius > 0) and (height / radius >= MIN_HEIGHT_TO_RADIUS)
+
+    is_cylinder = (rad_std_ratio <= RAD_STD_RATIO_THRESH and
+                cap_ratio >= (CAP_VERTEX_RATIO * 2) and
+                height_radius_ok)
+
+    if is_cylinder:
+        return ClothCollisionPrimitiveShape.CYLINDER
+
+    raise RuntimeError(f"Object '{obj.name}' has no primitive type specified in it's name and cannot be deduced from geometry!")
+
+
 def check_for_bad_lod_suffix(obj: bpy.types.Object):
     """ Checks if the object has an LOD suffix that is known to be ignored by  """
 
@@ -401,6 +844,7 @@ def check_for_bad_lod_suffix(obj: bpy.types.Object):
     for i in range(4, 10):
         if name.endswith(f"_lod{i}"):
             raise RuntimeError(failure_message)
+
 
 def select_objects(export_target: str) -> List[bpy.types.Object]:
     """ Returns a list of objects to export. """
@@ -424,7 +868,6 @@ def select_objects(export_target: str) -> List[bpy.types.Object]:
                     added.add(obj.name)
 
                     add_children(obj)
-
         
         for obj in objects:
             add_children(obj)
@@ -444,13 +887,6 @@ def select_objects(export_target: str) -> List[bpy.types.Object]:
             parent = parent.parent
 
     return objects + parents
-
-
-
-
-
-
-
 
 
 def expand_armature(armature: bpy.types.Object) -> Dict[str, Model]:
