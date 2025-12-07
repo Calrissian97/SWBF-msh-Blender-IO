@@ -1,10 +1,10 @@
 bl_info = {
     'name': 'SWBF .msh Import-Export',
-    'author': 'Will Snyder, PrismaticFlower',
-    "version": (1, 3, 4),
+    'author': 'Will Snyder, PrismaticFlower & Landon Hull, Calrissian97',
+    "version": (1, 3, 5),
     'blender': (4, 4, 1),
     'location': 'File > Import-Export',
-    'description': 'Export as SWBF .msh file',
+    'description': 'Import/Export .msh files for Star Wars Battlefront I/II (2004/2005).',
     'warning': '',
     'wiki_url': "https://github.com/SleepKiller/SWBF-msh-Blender-Export/blob/master/docs/reference_manual.md",
     'tracker_url': "https://github.com/SleepKiller/SWBF-msh-Blender-Export/issues",
