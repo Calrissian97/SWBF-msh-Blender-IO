@@ -8,9 +8,7 @@ from .msh_model import *
 from .msh_material import *
 from .msh_writer import Writer
 from .msh_utilities import *
-
 from .crc import *
-
 
 def save_scene(output_file, scene: Scene):
     """ Saves scene to the supplied file. """
@@ -51,6 +49,7 @@ def save_scene(output_file, scene: Scene):
         with hedr.create_child("CL1L"):
             pass
 
+
 def _write_sinf(sinf: Writer, scene: Scene):
     with sinf.create_child("NAME") as name:
         name.write_string(scene.name)
@@ -69,6 +68,7 @@ def _write_sinf(sinf: Writer, scene: Scene):
         bbox.write_f32(0.0, 0.0, 0.0, 1.0)
         bbox.write_f32(bbox_position.x, bbox_position.y, bbox_position.z)
         bbox.write_f32(bbox_size.x, bbox_size.y, bbox_size.z, bbox_length)
+
 
 def _write_matl_and_get_material_index(matl: Writer, scene: Scene):
     material_index: Dict[str, int] = {}
@@ -90,6 +90,7 @@ def _write_matl_and_get_material_index(matl: Writer, scene: Scene):
             _write_matd(matd, default_material_name, Material())
 
     return material_index
+
 
 def _write_matd(matd: Writer, material_name: str, material: Material):
     with matd.create_child("NAME") as name:
@@ -119,6 +120,7 @@ def _write_matd(matd: Writer, material_name: str, material: Material):
             with matd.create_child("TX3D") as tx3d:
                 tx3d.write_string(material.texture3)
 
+
 def _write_modl(modl: Writer, model: Model, index: int, material_index: Dict[str, int], model_index: Dict[str, int]):
     with modl.create_child("MTYP") as mtyp:
         mtyp.write_u32(model.model_type.value)
@@ -140,21 +142,25 @@ def _write_modl(modl: Writer, model: Model, index: int, material_index: Dict[str
     with modl.create_child("TRAN") as tran:
         _write_tran(tran, model.transform)
 
-    if model.geometry is not None:
+    if model.geometry is not None or model.cloth is not None:
         with modl.create_child("GEOM") as geom:
 
             with geom.create_child("BBOX") as bbox:
                 bbox.write_f32(0.0, 0.0, 0.0, 1.0)
                 bbox.write_f32(0, 0, 0)
                 bbox.write_f32(1.0,1.0,1.0,2.0)
+            
+            if model.cloth:
+                _write_clth(geom, model.cloth)
+            else:
+                # Standard geometry writing
+                for segment in model.geometry:
+                    with geom.create_child("SEGM") as segm:
+                        _write_segm(segm, segment, material_index)
 
-            for segment in model.geometry:
-                with geom.create_child("SEGM") as segm:
-                    _write_segm(segm, segment, material_index)
-
-            if model.bone_map:
-                with geom.create_child("ENVL") as envl:
-                    _write_envl(envl, model, model_index)
+                if model.bone_map:
+                    with geom.create_child("ENVL") as envl:
+                        _write_envl(envl, model, model_index)
 
     if model.collisionprimitive is not None:
         with modl.create_child("SWCI") as swci:
@@ -163,10 +169,106 @@ def _write_modl(modl: Writer, model: Model, index: int, material_index: Dict[str
             swci.write_f32(model.collisionprimitive.height)
             swci.write_f32(model.collisionprimitive.length)
 
+
+def _write_clth(writer: Writer, cloth: Cloth):
+    """ Writes a CLTH chunk and its children. """
+    with writer.create_child("CLTH") as clth_writer:
+        # CTEX
+        if cloth.texture:
+            with clth_writer.create_child("CTEX") as ctex_writer:
+                ctex_writer.write_string(cloth.texture)
+        # CPOS
+        if cloth.positions:
+            with clth_writer.create_child("CPOS") as cpos_writer:
+                cpos_writer.write_u32(len(cloth.positions))
+                for pos in cloth.positions:
+                    cpos_writer.write_f32(pos.x, pos.y, pos.z)
+        # CUV0
+        if cloth.uvs:
+            with clth_writer.create_child("CUV0") as cuv0_writer:
+                cuv0_writer.write_u32(len(cloth.uvs))
+                for uv in cloth.uvs:
+                    cuv0_writer.write_f32(uv[0], uv[1])
+        # CMSH
+        if cloth.triangles:
+            with clth_writer.create_child("CMSH") as cmsh_writer:
+                cmsh_writer.write_u32(len(cloth.triangles))
+                for tri in cloth.triangles:
+                    cmsh_writer.write_u32(tri[0], tri[1], tri[2])
+        # FIDX
+        if cloth.fixed_points:
+            with clth_writer.create_child("FIDX") as fidx_writer:
+                fidx_writer.write_u32(len(cloth.fixed_points))
+                for index in cloth.fixed_points:
+                    fidx_writer.write_u32(index)
+        # FWGT
+        if cloth.fixed_weights_bones:
+            with clth_writer.create_child("FWGT") as fwgt_writer:
+                fwgt_writer.write_u32(len(cloth.fixed_weights_bones))
+                for bone_name in cloth.fixed_weights_bones:
+                    fwgt_writer.write_string(bone_name)
+        # SPRS
+        if cloth.stretch_constraints:
+            with clth_writer.create_child("SPRS") as sprs_writer:
+                _write_sprs(sprs_writer, cloth.stretch_constraints)
+        # CPRS
+        if cloth.cross_constraints:
+            with clth_writer.create_child("CPRS") as cprs_writer:
+                _write_cprs(cprs_writer, cloth.cross_constraints)
+        # BPRS
+        if cloth.bend_constraints:
+            with clth_writer.create_child("BPRS") as bprs_writer:
+                _write_bprs(bprs_writer, cloth.bend_constraints)
+        # COLL
+        if cloth.collision_objects:
+            with clth_writer.create_child("COLL") as coll_writer:
+                _write_coll(coll_writer, cloth.collision_objects)
+
+
+def _write_sprs(sprs_writer: Writer, constraints: List[List[int]]):
+    """ Writes a SPRS chunk. """
+    sprs_writer.write_u32(len(constraints))
+    for constraint in constraints:
+        sprs_writer.write_u16(constraint[0], constraint[1])
+
+
+def _write_cprs(cprs_writer: Writer, constraints: List[List[int]]):
+    """ Writes a CPRS chunk. """
+    cprs_writer.write_u32(len(constraints))
+    for constraint in constraints:
+        cprs_writer.write_u16(constraint[0], constraint[1])
+
+
+def _write_bprs(bprs_writer: Writer, constraints: List[List[int]]):
+    """ Writes a BPRS chunk. """
+    bprs_writer.write_u32(len(constraints))
+    for constraint in constraints:
+        bprs_writer.write_u16(constraint[0], constraint[1])
+
+
+def _write_coll(coll_writer: Writer, collision_objects: List[CollisionPrimitive]):
+    """ Writes a COLL chunk for cloth. """
+    coll_writer.write_u32(len(collision_objects))
+    for prim in collision_objects:
+        coll_writer.write_string(prim.name)
+        coll_writer.write_string(prim.parent_name)
+        coll_writer.write_u32(prim.shape.value)
+
+        if prim.shape == ClothCollisionPrimitiveShape.SPHERE:
+            coll_writer.write_f32(prim.radius, prim.radius, prim.radius)
+
+        elif prim.shape == ClothCollisionPrimitiveShape.CYLINDER:
+            coll_writer.write_f32(prim.radius, prim.height, prim.radius)
+
+        elif prim.shape == ClothCollisionPrimitiveShape.BOX:
+            coll_writer.write_f32(prim.radius, prim.length, prim.height)
+
+
 def _write_tran(tran: Writer, transform: ModelTransform):
     tran.write_f32(1.0, 1.0, 1.0) # Scale, ignored by modelmunge
     tran.write_f32(transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w)
     tran.write_f32(transform.translation.x, transform.translation.y, transform.translation.z)
+
 
 def _write_segm(segm: Writer, segment: GeometrySegment, material_index: Dict[str, int]):
 
@@ -227,6 +329,7 @@ def _write_segm(segm: Writer, segment: GeometrySegment, material_index: Dict[str
             for index in islice(strip, 2, len(strip)):
                 strp.write_u16(index)
 
+
 '''
 SKINNING CHUNKS
 '''
@@ -244,10 +347,12 @@ def _write_wght(wght: Writer, weights: List[List[VertexWeight]]):
             wght.write_i32(weight.bone)
             wght.write_f32(weight.weight / total_weight)
 
+
 def _write_envl(envl: Writer, model: Model, model_index: Dict[str, int]):
     envl.write_u32(len(model.bone_map))
     for bone_name in model.bone_map:
         envl.write_u32(model_index[bone_name])
+
 
 '''
 SKELETON CHUNKS
@@ -259,6 +364,7 @@ def _write_bln2(bln2: Writer, anim: Animation):
     for bone_crc in bones:
         bln2.write_u32(bone_crc, 0) 
 
+
 def _write_skl2(skl2: Writer, anim: Animation):
     bones = anim.bone_frames.keys()
     skl2.write_u32(len(bones)) 
@@ -266,6 +372,7 @@ def _write_skl2(skl2: Writer, anim: Animation):
     for bone_crc in bones:
         skl2.write_u32(bone_crc, 0) #default values from docs
         skl2.write_f32(1.0, 0.0, 0.0)
+
 
 '''
 ANIMATION CHUNKS
@@ -304,4 +411,3 @@ def _write_anm2(anm2: Writer, anim: Animation):
             for frame in rotation_frames:
                 kfr3.write_u32(frame.index)
                 kfr3.write_f32(frame.rotation.x, frame.rotation.y, frame.rotation.z, frame.rotation.w)
-                
