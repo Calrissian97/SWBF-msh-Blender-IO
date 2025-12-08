@@ -264,9 +264,9 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
     if not names:
         for obj in bpy.context.scene.objects:
             if get_is_cloth_collision_primitive(obj):
-                coll_prim = get_cloth_collision_primitive(obj)
+                prim = get_cloth_collision_primitive(obj)
                 # The primitive needs its name and parent name for the COLL chunk
-                coll_prim.name = obj.name
+                prim.name = obj.name
 
                 # Scenes with skeletons need to target parent_bone instead of parent.name
                 if obj.parent.name == "skeleton":
@@ -274,7 +274,7 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
                 else:
                     prim.parent_name = obj.parent.name
                 
-                cloth.collision_objects.append(coll_prim)
+                cloth.collision_objects.append(prim)
 
     # Check if the mesh has been edited by comparing topology signatures.
     current_signature = f"{len(mesh.vertices)}:{len(mesh.edges)}:{len(mesh.polygons)}"
