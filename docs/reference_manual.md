@@ -9,6 +9,9 @@
   + [Import Properties](#import-properties)
   + [Import Failures](#import-failures)
   + [Import Behaviour to Know About](#import-behaviour-to-know-about)
+- [Cloth](#cloth)
+  + [Cloth Meshes](#cloth-meshes)
+  + [Cloth Collisions](#cloth-collisions)
 - [Shadow Volumes](#shadow-volumes)
 - [Terrain Cutters](#terrain-cutters)
 - [Collision](#collision)
@@ -239,7 +242,27 @@ If the .msh model to be imported has nodes with meshes that are weighted to or a
 
 Normals and vertex colors are currently not imported.  Normals will be calculated by Blender.
 
+## Cloth
 
+This fork of the addon can import/export cloth meshes for cloth simulation ingame (SWBF2 only).
+
+### Cloth Meshes
+
+SWBF2 introduced constraint-based cloth simulations for unit models (and props too!)
+SWBF2 uses ODF-defined properties to solve realtime cloth simulation each frame, optionally depending on mesh-specific constraint data.
+In the context of the addon, a few rules apply in order to export a mesh as a cloth:
+- At a minimum, the addon expects a cloth mesh to contain a "Pin" vertex group to represent fixed points that will not be simulated as cloth, but rather move with enveloped bones with the rest of the model for skinned models or statically attached for static models.
+- Each vertex of the cloth should be part of a vertex group called "bone_..." corresponding to the enveloped bone e.g., "bone_pelvis".
+- A custom String property should be present named "swbf_msh_cloth_collisions" which should be a string containing a list of each cloth collision primitive that should collide with the cloth mesh e.g., "['c_pelvis', 'c_l_thigh', 'c_l_calf']". If this custom property is missing, the addon will instead search for all models in the scene with the "c_..." naming convention and use these.
+- Cloth meshes should follow the same node hierarchy as skinned meshes (see [Skeletons and Skinning](#skeletons-and-skinning)) with their meshes a child of the Armature and Parent Bone set to their enveloped bone (re-parenting not necessary for imported cloth models).
+
+#### Cloth Collisions
+
+SWBF2 uses cloth collision primitives, not unlike regular [Collision Primitives](#collision-primitives) with a few key differences:
+- Cloth collision primitives may be a Cube, UV Sphere, or Ico Sphere with unmodified topology (transforms and scaling only).
+- Cloth collision naming conventions require the name of the model to start with "c_" as opposed to "p_" for normal collision primitives. while normal collision primitives expect "sphere", "cylinder", "cube", etc. in their name, cloth collisions follow the convention of being named after the bone they're parented to, e.g., "c_pelvis". The addon *will* accept regular collision primitive naming conventions as well though ingame results are not guaranteed. As a last resort, a heuristic calculation will be run to determine if the mesh is spherical, cuboid, or cylindrical based on the geometry (Do NOT rely on this, please try to follow the "c_" naming convention).
+
+Cloth collision primitives should be parented similarly to the cloth mesh, with it's parent the Armature and Parent Bone set to the bone it should move with for skinned models, or simply parented to the dummyroot for static models. It should also be noted that they should not have their transforms or scaling applied or they will simply match the transform and scale of the dummyroot upon export, just like regular collision primitives.
 
 ## Shadow Volumes
 SWBF's rendering engine uses Shadow Volumes for it's shadows. What this means is that the mesh for the shadow is seperate and different from the main mesh. And in order for your model to have shadows you must make the shadow mesh. 
