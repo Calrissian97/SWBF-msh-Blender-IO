@@ -252,7 +252,7 @@ SWBF2 introduced constraint-based cloth simulations for unit models (and props t
 SWBF2 uses ODF-defined properties to solve realtime cloth simulation each frame, optionally depending on mesh-specific constraint data.
 In the context of the addon, a few rules apply in order to export a mesh as a cloth:
 - At a minimum, the addon expects a cloth mesh to contain a "Pin" vertex group to represent fixed points that will not be simulated as cloth, but rather move with enveloped bones with the rest of the model for skinned models or statically attached for static models.
-- Each vertex of the cloth should be part of a vertex group called "bone_..." corresponding to the enveloped bone e.g., "bone_pelvis".
+- Each vertex of the cloth should be part of a vertex group called "bone_..." corresponding to the enveloped bone e.g., "bone_pelvis" if the model has a skeleton (static models like props don't require this).
 - A custom String property should be present named "swbf_msh_cloth_collisions" which should be a string containing a list of each cloth collision primitive that should collide with the cloth mesh e.g., "['c_pelvis', 'c_l_thigh', 'c_l_calf']". If this custom property is missing, the addon will instead search for all models in the scene with the "c_..." naming convention and use these.
 - Cloth meshes should follow the same node hierarchy as skinned meshes (see [Skeletons and Skinning](#skeletons-and-skinning)) with their meshes a child of the Armature and Parent Bone set to their enveloped bone (re-parenting not necessary for imported cloth models).
 
