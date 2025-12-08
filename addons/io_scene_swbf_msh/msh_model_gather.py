@@ -305,11 +305,14 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
 
     polygons = mesh.polygons
 
-    # Stretch and Cross constraints
+    # Calculate cloth constraints
     for i, face in enumerate(polygons):
-        # Stretch constraints
-        # p1-p2, p2-p3, p3-p4, p4-p1
-        # This allows for any amount of sides to the polygon
+        # v1 ┌────┐ v2
+        #    │    │
+        #    │    │
+        # v4 └────┘ v3
+        # Stretch constraints, along the boundary of the polygon
+        # v1-v2, v2-v3, v3-v4, v4-v1
         last_vert_idx = face.vertices[-1]
         for vert_idx in face.vertices:
             if is_fixed(vert_idx) and is_fixed(last_vert_idx):
@@ -320,8 +323,9 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
             stretch_constraints.add(constraint)
             last_vert_idx = vert_idx
 
-        # Cross constraints, diagonally across _quads_
-        # Only works for quads currently
+        # Cross constraints, diagonally across quad
+        # v1-v3, v2-v4
+        # Only works for quads
         if len(face.vertices) == 4:
             v = face.vertices
             pair_1 = (v[0], v[2])
@@ -334,45 +338,52 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
             if not (is_fixed(pair_2[0]) and is_fixed(pair_2[1])):
                 cross_constraints.add(tuple(sorted(pair_2)))
 
-    # Bend constraints
-    for i, face1 in enumerate(polygons):
-        for j, face2 in enumerate(polygons):
-            if i >= j:  # Process each pair of faces only once
+        # Bend constraints
+        # Prevents cloth from overbending
+        # v1   v2     v3
+        # ┌─────┬─────┐
+        # │     │     │
+        # │ v8  │ v9  │ v4
+        # ├─────┼─────┤
+        # │     │     │
+        # │     │     │
+        # └─────┴─────┘
+        # v7    v6    v5
+        #
+        # v1-v3, v3-v5, v5-v7, v7-v1, v8-v4, v2-v6
+        # Connects all faces in this pattern
+        for face2 in polygons:
+            if face is face2:
                 continue
-            shared_vertices_indices = list(set(face1.vertices) & set(face2.vertices))
 
-            # Bend constraints are typically between two faces sharing an edge (2 shared vertices)
-            if len(shared_vertices_indices) != 2:
+            shared_vertices = [v for v in face2.vertices if v in face.vertices]
+            if len(shared_vertices) != 2:
                 continue
 
-            # Find the vertices in each face that are NOT shared
-            face1_non_shared = [v for v in face1.vertices if v not in shared_vertices_indices]
-            face2_non_shared = [v for v in face2.vertices if v not in shared_vertices_indices]
+            non_shared1 = [v for v in face.vertices if v not in shared_vertices]
+            non_shared2 = [v for v in face2.vertices if v not in shared_vertices]
+            if not non_shared1 or not non_shared2:
+                continue
 
-            # The reference logic connects vertices that are "opposite" the shared edge.
-            # For two adjacent triangles, this is simple. For quads, it's more complex,
-            # but this pairing should cover the common cases.
-            # We connect each non-shared vertex of face1 to each non-shared vertex of face2.
-            for v1 in face1_non_shared:
-                for v2 in face2_non_shared:
-                    # Skip if both vertices are fixed
-                    if is_fixed(v1) and is_fixed(v2):
-                        continue
+            if len(non_shared1) == 1 and len(non_shared2) == 1:
+                # Triangle case
+                v1, v2 = non_shared1[0], non_shared2[0]
+                if not (is_fixed(v1) and is_fixed(v2)):
+                    bend_constraints.add(tuple(sorted((v1, v2))))
+            else:
+                # Quad case: pair by adjacency
+                pairs = []
+                for v1 in non_shared1:
+                    for v2 in non_shared2:
+                        # Check if v1 and v2 are opposite across the shared edge
+                        if any(frozenset((v1, sv)) in face.edge_keys and
+                            frozenset((v2, sv)) in face2.edge_keys
+                            for sv in shared_vertices):
+                            pairs.append((v1, v2))
 
-                    constraint = tuple(sorted((v1, v2)))
-
-                    # Check for duplicates before adding
-                    if constraint in bend_constraints:
-                        continue
-
-                    # A simple check to avoid creating constraints that are too long,
-                    # which can happen with non-standard topology. This helps ensure
-                    # we are only connecting "nearby" opposite vertices.
-                    if len(face1.vertices) > 3 or len(face2.vertices) > 3:
-                         if (v1,v2) in stretch_constraints or (v2,v1) in stretch_constraints:
-                            continue
-
-                    bend_constraints.add(constraint)
+                for v1, v2 in pairs:
+                    if not (is_fixed(v1) and is_fixed(v2)):
+                        bend_constraints.add(tuple(sorted((v1, v2))))
 
     # Save recalculated constraints
     cloth.stretch_constraints = [list(item) for item in stretch_constraints]
