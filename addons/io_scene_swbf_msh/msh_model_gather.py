@@ -167,12 +167,31 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
     cloth = Cloth()
     mesh = blender_obj.data
 
-    # Get texture from the first material slot's custom properties
-    if mesh.materials and mesh.materials[0] and hasattr(mesh.materials[0], 'swbf_msh_mat'):
-        mat_props = mesh.materials[0].swbf_msh_mat
-        if mat_props.diffuse_map:
-            cloth.texture = os.path.basename(mat_props.diffuse_map)
+    # Get texture from the first material slot
+    if mesh.materials and mesh.materials[0]:
+        material = mesh.materials[0]
+        texture_found = False
 
+        # Try to get texture from a standard node setup first
+        if material.use_nodes and material.node_tree:
+            for node in material.node_tree.nodes:
+                if node.type == 'BSDF_PRINCIPLED':
+                    base_color_input = node.inputs.get("Base Color")
+                    if base_color_input and base_color_input.is_linked:
+                        linked_node = base_color_input.links[0].from_node
+                        if linked_node.type == 'TEX_IMAGE' and linked_node.image:
+                            cloth.texture = os.path.basename(linked_node.image.filepath)
+                            texture_found = True
+                            break # Found it
+
+        # Fallback to custom property if no standard texture was found
+        if not texture_found and hasattr(material, 'swbf_msh_mat'):
+            mat_props = material.swbf_msh_mat
+            if mat_props.diffuse_map:
+                cloth.texture = os.path.basename(mat_props.diffuse_map)
+    else:
+        raise RuntimeError(f"Object '{blender_obj.name}' has no materials!")
+    
     # Get vertex positions (converted to SWBF coordinate space)
     cloth.positions = [convert_vector_space(v.co) for v in mesh.vertices]
 
@@ -187,6 +206,8 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
                 loop = mesh.loops[loop_index]
                 vert_index = loop.vertex_index
                 cloth.uvs[vert_index] = list(uv_layer[loop_index].uv)
+    else:
+        raise RuntimeError(f"Object '{blender_obj.name}' has no UVs!")
 
     # Get triangles
     mesh.calc_loop_triangles()
@@ -227,16 +248,17 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
 
     for name in names:
         if name in bpy.context.scene.objects:
-            obj = bpy.context.scene.objects[name]
-            prim = get_cloth_collision_primitive(obj)
-            prim.name = obj.name
+            if get_is_cloth_collision_primitive(bpy.context.scene.objects[name]):
+                obj = bpy.context.scene.objects[name]
+                prim = get_cloth_collision_primitive(obj)
+                prim.name = obj.name
 
-            if obj.parent.name == "skeleton":
-                prim.parent_name = obj.parent_bone
-            else:
-                prim.parent_name = obj.parent.name
-            
-            cloth.collision_objects.append(prim)
+                if obj.parent.name == "skeleton":
+                    prim.parent_name = obj.parent_bone
+                else:
+                    prim.parent_name = obj.parent.name
+                
+                cloth.collision_objects.append(prim)
 
     # If empty swbf_msh_cloth_collisions property, search entire scene
     if not names:
@@ -246,14 +268,32 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
                 # The primitive needs its name and parent name for the COLL chunk
                 coll_prim.name = obj.name
 
-            if obj.parent.name == "skeleton":
-                prim.parent_name = obj.parent_bone
-            else:
-                prim.parent_name = obj.parent.name
+                # Scenes with skeletons need to target parent_bone instead of parent.name
+                if obj.parent.name == "skeleton":
+                    prim.parent_name = obj.parent_bone
+                else:
+                    prim.parent_name = obj.parent.name
                 
                 cloth.collision_objects.append(coll_prim)
 
-    # Recalculate constraints
+    # Check if the mesh has been edited by comparing topology signatures.
+    current_signature = f"{len(mesh.vertices)}:{len(mesh.edges)}:{len(mesh.polygons)}"
+    original_signature = blender_obj.get("swbf_msh_cloth_mesh_signature", "")
+    mesh_is_unedited = (current_signature == original_signature)
+
+    # If mesh is unedited, just use imported data if present.
+    if mesh_is_unedited:
+        if "swbf_msh_cloth_stretch_constraints" in blender_obj and "swbf_msh_cloth_cross_constraints" in blender_obj and "swbf_msh_cloth_bend_constraints" in blender_obj:
+            try:
+                cloth.stretch_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_stretch_constraints"])
+                cloth.cross_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_cross_constraints"])
+                cloth.bend_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_bend_constraints"])
+                return cloth
+            except (ValueError, SyntaxError):
+                # If parsing fails, proceed to recalculate values
+                pass
+
+    # Recalculated constraints
     stretch_constraints = set()
     cross_constraints = set()
     bend_constraints = set()
@@ -265,12 +305,7 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
 
     polygons = mesh.polygons
 
-    # Build a map of vertex to polygons it belongs to
-    vert_to_poly_map = {i: [] for i in range(len(mesh.vertices))}
-    for i, poly in enumerate(polygons):
-        for vert_idx in poly.vertices:
-            vert_to_poly_map[vert_idx].append(i)
-
+    # Stretch and Cross constraints
     for i, face in enumerate(polygons):
         # Stretch constraints
         # p1-p2, p2-p3, p3-p4, p4-p1
@@ -339,31 +374,10 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
 
                     bend_constraints.add(constraint)
 
-    # Check if the mesh has been edited by comparing topology signatures.
-    current_signature = f"{len(mesh.vertices)}:{len(mesh.edges)}:{len(mesh.polygons)}"
-    original_signature = blender_obj.get("swbf_msh_cloth_mesh_signature", "")
-    mesh_is_unedited = (current_signature == original_signature)
-
-    # If recalculation failed AND the mesh is unedited, fall back to imported data.
-    if (not cross_constraints or not bend_constraints) and mesh_is_unedited:
-        if "swbf_msh_cloth_cross_constraints" in blender_obj:
-            try:
-                cloth.stretch_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_stretch_constraints"])
-                cloth.cross_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_cross_constraints"])
-                cloth.bend_constraints = ast.literal_eval(blender_obj["swbf_msh_cloth_bend_constraints"])
-                return cloth # Return early as we are using original data
-            except (ValueError, SyntaxError):
-                # If parsing fails, proceed to use the (empty) recalculated values
-                pass
-
-    # Otherwise, always use the newly calculated constraints.
-    # This path is taken if:
-    # 1. Recalculation was successful.
-    # 2. The mesh was edited (we must use new values).
-    # 3. Fallback failed due to missing or corrupt custom properties.
-        cloth.stretch_constraints = [list(item) for item in stretch_constraints]
-        cloth.cross_constraints = [list(item) for item in cross_constraints]
-        cloth.bend_constraints = [list(item) for item in bend_constraints]
+    # Save recalculated constraints
+    cloth.stretch_constraints = [list(item) for item in stretch_constraints]
+    cloth.cross_constraints = [list(item) for item in cross_constraints]
+    cloth.bend_constraints = [list(item) for item in bend_constraints]
 
     return cloth
 
@@ -496,8 +510,8 @@ def create_mesh_geometry(mesh: bpy.types.Mesh, valid_vgroup_indices: Set[int]) -
 def get_model_type(obj: bpy.types.Object, armature_found: bpy.types.Object) -> ModelType:
     """ Get the ModelType for a Blender object. """
 
-    # A cloth object is identified by its "Pin" vertex group and the custom properties we added on import.
-    if obj.vertex_groups.get("Pin") and "swbf_msh_cloth_stretch_constraints" in obj:
+    # A cloth object is identified by its "Pin" vertex group
+    if "Pin" in obj.vertex_groups.keys():
         return ModelType.CLOTH
 
     if obj.type in MESH_OBJECT_TYPES:
@@ -829,7 +843,7 @@ def get_cloth_collision_primitive_shape(obj: bpy.types.Object) -> ClothCollision
     if is_cylinder:
         return ClothCollisionPrimitiveShape.CYLINDER
 
-    raise RuntimeError(f"Object '{obj.name}' has no primitive type specified in it's name and cannot be deduced from geometry!")
+    raise RuntimeError(f"Object '{obj.name}' has no cloth primitive type specified in it's name and cannot be deduced from geometry!")
 
 
 def check_for_bad_lod_suffix(obj: bpy.types.Object):
