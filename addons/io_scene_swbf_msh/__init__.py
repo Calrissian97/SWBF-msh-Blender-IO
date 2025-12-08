@@ -6,8 +6,8 @@ bl_info = {
     'location': 'File > Import-Export',
     'description': 'Import/Export .msh files for Star Wars Battlefront I/II (2004/2005).',
     'warning': '',
-    'wiki_url': "https://github.com/SleepKiller/SWBF-msh-Blender-Export/blob/master/docs/reference_manual.md",
-    'tracker_url': "https://github.com/SleepKiller/SWBF-msh-Blender-Export/issues",
+    'wiki_url': "https://github.com/Calrissian97/SWBF-msh-Blender-Export/blob/master/docs/reference_manual.md",
+    'tracker_url': "https://github.com/Calrissian97/SWBF-msh-Blender-Export/issues",
     'support': 'COMMUNITY',
     'category': 'Import-Export'
 }
