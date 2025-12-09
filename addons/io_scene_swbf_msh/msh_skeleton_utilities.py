@@ -37,8 +37,17 @@ def get_real_BONES(armature: bpy.types.Armature) -> Set[str]:
         for bone in skel_props:
             real_bones.add(bone.name)
     if action:
-        for group in armature.animation_data.action.groups:
-            real_bones.add(group.name)
+        # Blender 4.x, groups still accessible from action
+        if hasattr(action, "groups"):
+            for group in action.groups:
+                real_bones.add(group.name)
+        else:
+            # Blender 5.0+, groups in layers->strips->channelbags
+            for layer in action.layers:
+                for strip in layer.strips:
+                    for channelbag in strip.channelbags:
+                        for group in channelbag.groups:
+                            real_bones.add(group.name)
 
     if len(skel_props) == 0 and action is None:
         for bone in armature.data.bones:
