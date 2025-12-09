@@ -78,11 +78,36 @@ def extract_and_apply_anim(filename : str, scene : Scene):
                 loc_data_path = "pose.bones[\"{}\"].location".format(bone.name)
                 rot_data_path = "pose.bones[\"{}\"].rotation_quaternion".format(bone.name)
 
+                # Blender 4.x, fcurves still accessible from action
+                if hasattr(action, "fcurves"):
+                    fcurve_rot_w = action.fcurves.new(rot_data_path, index=0, action_group=bone.name)
+                    fcurve_rot_x = action.fcurves.new(rot_data_path, index=1, action_group=bone.name)
+                    fcurve_rot_y = action.fcurves.new(rot_data_path, index=2, action_group=bone.name)
+                    fcurve_rot_z = action.fcurves.new(rot_data_path, index=3, action_group=bone.name)
+                else:
+                    # Blender 5.0+ now requires Slotted Animations and ChannelBags for fcurves access
+                    if action.slots:
+                        slot = action.slots[0]
+                    else:
+                        slot = action.slots.new(id_type='OBJECT', name=anim_name)
 
-                fcurve_rot_w = action.fcurves.new(rot_data_path, index=0, action_group=bone.name)
-                fcurve_rot_x = action.fcurves.new(rot_data_path, index=1, action_group=bone.name)
-                fcurve_rot_y = action.fcurves.new(rot_data_path, index=2, action_group=bone.name)
-                fcurve_rot_z = action.fcurves.new(rot_data_path, index=3, action_group=bone.name)
+                    if action.layers:
+                        layer = action.layers[0]
+                    else:
+                        layer = action.layers.new(name="Base Layer")
+
+                    if layer.strips:
+                        strip = layer.strips[0]
+                    else:
+                        strip = layer.strips.new(type='KEYFRAME')
+                    
+                    channelbag = strip.channelbag(slot, ensure=True)
+                    
+                    # Create fcurves via new ChannelBags class (group_name replaces action_group)
+                    fcurve_rot_w = channelbag.fcurves.new(rot_data_path, index=0, group_name=bone.name)
+                    fcurve_rot_x = channelbag.fcurves.new(rot_data_path, index=1, group_name=bone.name)
+                    fcurve_rot_y = channelbag.fcurves.new(rot_data_path, index=2, group_name=bone.name)
+                    fcurve_rot_z = channelbag.fcurves.new(rot_data_path, index=3, group_name=bone.name)
 
                 for frame in rotation_frames:
                     i = frame.index
@@ -93,9 +118,21 @@ def extract_and_apply_anim(filename : str, scene : Scene):
                     fcurve_rot_y.keyframe_points.insert(i,q.y)
                     fcurve_rot_z.keyframe_points.insert(i,q.z)
 
-                fcurve_loc_x = action.fcurves.new(loc_data_path, index=0, action_group=bone.name)
-                fcurve_loc_y = action.fcurves.new(loc_data_path, index=1, action_group=bone.name)
-                fcurve_loc_z = action.fcurves.new(loc_data_path, index=2, action_group=bone.name)
+                # Blender 4.x
+                if hasattr(action, "fcurves"):
+                    fcurve_loc_x = action.fcurves.new(loc_data_path, index=0, action_group=bone.name)
+                    fcurve_loc_y = action.fcurves.new(loc_data_path, index=1, action_group=bone.name)
+                    fcurve_loc_z = action.fcurves.new(loc_data_path, index=2, action_group=bone.name)
+                else:
+                    # Blender 5.0+, use new slotted animations system and channelbag classes
+                    slot = action.slots[0]
+                    layer = action.layers[0]
+                    strip = layer.strips[0]
+                    channelbag = strip.channelbag(slot, ensure=True)
+                    
+                    fcurve_loc_x = channelbag.fcurves.new(loc_data_path, index=0, group_name=bone.name)
+                    fcurve_loc_y = channelbag.fcurves.new(loc_data_path, index=1, group_name=bone.name)
+                    fcurve_loc_z = channelbag.fcurves.new(loc_data_path, index=2, group_name=bone.name)
 
                 for frame in translation_frames:
                     i = frame.index
