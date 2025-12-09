@@ -1,6 +1,6 @@
 bl_info = {
     'name': 'SWBF .msh Import-Export',
-    'author': 'Will Snyder, PrismaticFlower & Landon Hull, Calrissian97',
+    'author': 'Will Snyder, PrismaticFlower, Landon Hull aka Calrissian97',
     "version": (1, 3, 5),
     'blender': (4, 4, 1),
     'location': 'File > Import-Export',
