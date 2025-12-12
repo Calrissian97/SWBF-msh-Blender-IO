@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'SWBF .msh Import-Export',
     'author': 'Will Snyder, PrismaticFlower, Landon Hull aka Calrissian97',
-    "version": (1, 3, 7),
+    "version": (1, 3, 8),
     'blender': (4, 4, 1),
     'location': 'File > Import-Export',
     'description': 'Import/Export .msh files for Star Wars Battlefront I/II (2004/2005).',
