@@ -376,15 +376,45 @@ def extract_and_apply_munged_anim(input_file_path):
 
                 return v if has_key else None
 
-            fcurve_rot_w = action.fcurves.new(rot_data_path, index=0, action_group=bone.name)
-            fcurve_rot_x = action.fcurves.new(rot_data_path, index=1, action_group=bone.name)
-            fcurve_rot_y = action.fcurves.new(rot_data_path, index=2, action_group=bone.name)
-            fcurve_rot_z = action.fcurves.new(rot_data_path, index=3, action_group=bone.name)
+            # Blender 4.x
+            if hasattr(action, "fcurves"):
+                fcurve_rot_w = action.fcurves.new(rot_data_path, index=0, action_group=bone.name)
+                fcurve_rot_x = action.fcurves.new(rot_data_path, index=1, action_group=bone.name)
+                fcurve_rot_y = action.fcurves.new(rot_data_path, index=2, action_group=bone.name)
+                fcurve_rot_z = action.fcurves.new(rot_data_path, index=3, action_group=bone.name)
 
-            if has_translation:
-                fcurve_loc_x = action.fcurves.new(loc_data_path, index=0, action_group=bone.name)
-                fcurve_loc_y = action.fcurves.new(loc_data_path, index=1, action_group=bone.name)
-                fcurve_loc_z = action.fcurves.new(loc_data_path, index=2, action_group=bone.name)
+                if has_translation:
+                    fcurve_loc_x = action.fcurves.new(loc_data_path, index=0, action_group=bone.name)
+                    fcurve_loc_y = action.fcurves.new(loc_data_path, index=1, action_group=bone.name)
+                    fcurve_loc_z = action.fcurves.new(loc_data_path, index=2, action_group=bone.name)
+            # Blender 5.0+
+            else:
+                if action.slots:
+                    slot = action.slots[0]
+                else:
+                    slot = action.slots.new(id_type='OBJECT', name=anim_str)
+
+                if action.layers:
+                    layer = action.layers[0]
+                else:
+                    layer = action.layers.new(name="Base Layer")
+
+                if layer.strips:
+                    strip = layer.strips[0]
+                else:
+                    strip = layer.strips.new(type='KEYFRAME')
+
+                channelbag = strip.channelbag(slot, ensure=True)
+
+                fcurve_rot_w = channelbag.fcurves.new(rot_data_path, index=0, group_name=bone.name)
+                fcurve_rot_x = channelbag.fcurves.new(rot_data_path, index=1, group_name=bone.name)
+                fcurve_rot_y = channelbag.fcurves.new(rot_data_path, index=2, group_name=bone.name)
+                fcurve_rot_z = channelbag.fcurves.new(rot_data_path, index=3, group_name=bone.name)
+
+                if has_translation:
+                    fcurve_loc_x = channelbag.fcurves.new(loc_data_path, index=0, group_name=bone.name)
+                    fcurve_loc_y = channelbag.fcurves.new(loc_data_path, index=1, group_name=bone.name)
+                    fcurve_loc_z = channelbag.fcurves.new(loc_data_path, index=2, group_name=bone.name)
 
             for frame in range(num_frames):
 
@@ -416,18 +446,3 @@ def extract_and_apply_munged_anim(input_file_path):
                         fcurve_loc_z.keyframe_points.insert(frame,t.z)
 
         arma.animation_data.action = action
-
-
-
-
-
-
-       
-
-
-
-
-
-
-
-
