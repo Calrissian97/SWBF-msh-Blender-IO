@@ -306,9 +306,20 @@ to provide an exact emulation"""
             # Don't know how to set interpolation when adding keyframes
             # so we must do it after the fact
             if material.node_tree.animation_data and material.node_tree.animation_data.action:
-                for fcurve in material.node_tree.animation_data.action.fcurves:
-                    for kf in fcurve.keyframe_points.values():
-                        kf.interpolation = 'LINEAR'
+                action = material.node_tree.animation_data.action
+                # Blender 4.x
+                if hasattr(action, "fcurves"):
+                    for fcurve in action.fcurves:
+                        for kf in fcurve.keyframe_points:
+                            kf.interpolation = 'LINEAR'
+                # Blender 5.0+
+                else:
+                    for layer in action.layers:
+                        for strip in layer.strips:
+                            for channelbag in strip.channelbags:
+                                for fcurve in channelbag.fcurves:
+                                    for kf in fcurve.keyframe_points:
+                                        kf.interpolation = 'LINEAR'
 
         '''
         else:
@@ -321,4 +332,3 @@ to provide an exact emulation"""
         '''
 
         return {'FINISHED'}
-
