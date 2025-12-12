@@ -1,6 +1,7 @@
 """ Contains functions for extracting a scene from a .msh file"""
 
 import os
+import bpy
 from itertools import islice
 from typing import Dict
 from .msh_scene import Scene
@@ -69,7 +70,10 @@ def read_scene(input_file, anim_only=False, debug=0) -> Scene:
 
                                 if next_header == "SINF":
                                     with msh2.read_child() as sinf:
-                                        pass
+                                        if sinf.peak_next_header() == "NAME":
+                                            with sinf.read_child() as name:
+                                                scene.name = name.read_string()
+                                                bpy.context.scene.name = scene.name
 
                                 elif next_header == "MATL":
                                     with msh2.read_child() as matl:
