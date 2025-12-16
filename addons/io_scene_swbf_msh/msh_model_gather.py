@@ -190,7 +190,7 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
             if mat_props.diffuse_map:
                 cloth.texture = os.path.basename(mat_props.diffuse_map)
     else:
-        raise RuntimeError(f"Object '{blender_obj.name}' has no materials!")
+        raise RuntimeError(f"Object '{blender_obj.name}' has no material!")
     
     # Get vertex positions (converted to SWBF coordinate space)
     cloth.positions = [convert_vector_space(v.co) for v in mesh.vertices]
@@ -216,10 +216,12 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
     # Get pinned vertices and their bone weights from vertex groups
     pin_group = blender_obj.vertex_groups.get("Pin")
     if pin_group:
-        pinned_verts = {}  # Dict of {vertex_index: bone_name}
+        fixed_points = []
+        fixed_weights_bones = []
         for v in mesh.vertices:
-            is_pinned = any(g.group == pin_group.index and g.weight > 0.5 for g in v.groups)
+            is_pinned = any(g.group == pin_group.index for g in v.groups)
             if is_pinned:
+                fixed_points.append(v.index)
                 bone_name = None
                 highest_weight = 0.0
                 for g2 in v.groups:
@@ -227,13 +229,15 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
                     if group_name != "Pin" and g2.weight > highest_weight:
                         highest_weight = g2.weight
                         bone_name = group_name
-                if bone_name:
-                    pinned_verts[v.index] = bone_name
+                fixed_weights_bones.append(bone_name if bone_name else "")
 
-        if pinned_verts:
-            sorted_pins = sorted(pinned_verts.items())
-            cloth.fixed_points = [item[0] for item in sorted_pins]
-            cloth.fixed_weights_bones = [item[1] for item in sorted_pins]
+        if fixed_points:
+            cloth.fixed_points = fixed_points
+            # Only add bone weights if there are any non-empty bone names
+            if any(fixed_weights_bones):
+                cloth.fixed_weights_bones = fixed_weights_bones
+        else:
+            raise RuntimeError(f"Object (CLOTH) '{blender_obj.name}' has no pinned vertices!")
 
     # Get collision primitives for this cloth
     raw = blender_obj.get("swbf_msh_cloth_collisions", "[]")
@@ -717,142 +721,6 @@ def get_cloth_collision_primitive_shape(obj: bpy.types.Object) -> ClothCollision
     # XSI and Blender boxes (original and imported/triangulated)
     if vcount == 8 and fcount == 6 or vcount == 8 and fcount == 12:
         return ClothCollisionPrimitiveShape.BOX
-    
-    # Last resort, heuristic calculation
-    # Sphere
-    DIST_STD_RATIO_THRESH = 0.03
-
-    # gather verts in object space
-    verts = [v.co for v in mesh.vertices]
-    V = len(verts)
-    if V == 0:
-        raise RuntimeError(f"Object '{obj.name}' has no geometry!")
-
-    # centroid
-    cx = sum(v.x for v in verts) / V
-    cy = sum(v.y for v in verts) / V
-    cz = sum(v.z for v in verts) / V
-
-    # distances and population stddev
-    dists = []
-    for v in verts:
-        dx = v.x - cx; dy = v.y - cy; dz = v.z - cz
-        dists.append(math.sqrt(dx*dx + dy*dy + dz*dz))
-    mean_d = sum(dists) / V
-    var_d = sum((d - mean_d) ** 2 for d in dists) / V
-    std_d = math.sqrt(var_d)
-    dist_std_ratio = std_d / mean_d if mean_d else float('inf')
-    is_sphere = dist_std_ratio <= DIST_STD_RATIO_THRESH
-
-    if is_sphere:
-        return ClothCollisionPrimitiveShape.SPHERE
-    
-    # Cube
-    DIM_EQUAL_TOL = 0.03    # relative tolerance for dx,dy,dz equality
-    PLANE_TOL_FRAC = 0.02   # tolerance as fraction of max half-extent
-    MIN_FACE_VERTEX_RATIO = 0.95
-
-    # gather verts
-    verts = [v.co for v in mesh.vertices]
-    V = len(verts)
-    if V == 0:
-        raise RuntimeError(f"Object '{obj.name}' has no geometry!")
-
-    # axis-aligned bbox and center (object space)
-    xs = [v.x for v in verts]; ys = [v.y for v in verts]; zs = [v.z for v in verts]
-    minx, maxx = min(xs), max(xs); miny, maxy = min(ys), max(ys); minz, maxz = min(zs), max(zs)
-    dx, dy, dz = maxx - minx, maxy - miny, maxz - minz
-    mean_dim = (dx + dy + dz) / 3.0
-    dims_equal = (abs(dx - mean_dim) / mean_dim <= DIM_EQUAL_TOL and
-                abs(dy - mean_dim) / mean_dim <= DIM_EQUAL_TOL and
-                abs(dz - mean_dim) / mean_dim <= DIM_EQUAL_TOL)
-
-    cx, cy, cz = (minx + maxx) / 2.0, (miny + maxy) / 2.0, (minz + maxz) / 2.0
-    hx, hy, hz = dx / 2.0, dy / 2.0, dz / 2.0
-    plane_tol = max(hx, hy, hz) * PLANE_TOL_FRAC
-
-    # count vertices that lie on one of the six face planes (within tolerance)
-    face_count = 0
-    for v in verts:
-        on_x_face = abs(abs(v.x - cx) - hx) <= plane_tol
-        on_y_face = abs(abs(v.y - cy) - hy) <= plane_tol
-        on_z_face = abs(abs(v.z - cz) - hz) <= plane_tol
-        if on_x_face or on_y_face or on_z_face:
-            face_count += 1
-
-    face_ratio = face_count / V
-    is_box = dims_equal and (face_ratio >= MIN_FACE_VERTEX_RATIO)
-
-    if is_box:
-        return ClothCollisionPrimitiveShape.BOX
-    
-    # Cylinder
-    RAD_STD_RATIO_THRESH = 0.05   # radial stddev / mean
-    CAP_VERTEX_RATIO = 0.20       # fraction of verts on caps (each cap)
-    CAP_TOL_FRAC = 0.02           # tolerance relative to half-height for cap detection
-    MIN_HEIGHT_TO_RADIUS = 0.6    # height should be at least this multiple of radius (avoid flat discs)
-
-    # gather verts in object space
-    verts = [v.co for v in mesh.vertices]
-    V = len(verts)
-    if V == 0:
-        raise RuntimeError(f"Object '{obj.name}' has no geometry!")
-
-    # axis-aligned bbox to pick cylinder axis (largest extent)
-    xs = [v.x for v in verts]; ys = [v.y for v in verts]; zs = [v.z for v in verts]
-    minx, maxx = min(xs), max(xs); miny, maxy = min(ys), max(ys); minz, maxz = min(zs), max(zs)
-    dx, dy, dz = maxx - minx, maxy - miny, maxz - minz
-    # choose axis index: 0=x,1=y,2=z
-    if dx >= dy and dx >= dz:
-        axis = 0; min_a, max_a = minx, maxx
-    elif dy >= dx and dy >= dz:
-        axis = 1; min_a, max_a = miny, maxy
-    else:
-        axis = 2; min_a, max_a = minz, maxz
-
-    # center and half-height
-    center_a = (min_a + max_a) / 2.0
-    half_h = (max_a - min_a) / 2.0
-    cap_tol = max(half_h, 1e-6) * CAP_TOL_FRAC
-
-    # compute radial distances from chosen axis and cap membership
-    rads = []
-    cap_count = 0
-    for v in verts:
-        if axis == 0:
-            a = v.x - center_a
-            ox, oy = v.y, v.z
-        elif axis == 1:
-            a = v.y - center_a
-            ox, oy = v.x, v.z
-        else:
-            a = v.z - center_a
-            ox, oy = v.x, v.y
-        r = math.hypot(ox, oy)
-        rads.append(r)
-        if abs(abs(a) - half_h) <= cap_tol:
-            cap_count += 1
-
-    # radial stats (population stddev)
-    mean_r = sum(rads) / V
-    var_r = sum((r - mean_r) ** 2 for r in rads) / V
-    std_r = math.sqrt(var_r)
-    rad_std_ratio = std_r / mean_r if mean_r else float('inf')
-
-    # cap ratio (both caps combined)
-    cap_ratio = cap_count / V
-
-    # simple height vs radius check (avoid detecting discs as cylinders)
-    height = 2.0 * half_h
-    radius = mean_r
-    height_radius_ok = (radius > 0) and (height / radius >= MIN_HEIGHT_TO_RADIUS)
-
-    is_cylinder = (rad_std_ratio <= RAD_STD_RATIO_THRESH and
-                cap_ratio >= (CAP_VERTEX_RATIO * 2) and
-                height_radius_ok)
-
-    if is_cylinder:
-        return ClothCollisionPrimitiveShape.CYLINDER
 
     raise RuntimeError(f"Object '{obj.name}' has no cloth primitive type specified in it's name and cannot be deduced from geometry!")
 
