@@ -174,39 +174,33 @@ def _write_clth(writer: Writer, cloth: Cloth):
     """ Writes a CLTH chunk and its children. """
     with writer.create_child("CLTH") as clth_writer:
         # CTEX
-        if cloth.texture:
-            with clth_writer.create_child("CTEX") as ctex_writer:
-                ctex_writer.write_string(cloth.texture)
+        with clth_writer.create_child("CTEX") as ctex_writer:
+            ctex_writer.write_string(cloth.texture)
         # CPOS
-        if cloth.positions:
-            with clth_writer.create_child("CPOS") as cpos_writer:
-                cpos_writer.write_u32(len(cloth.positions))
-                for pos in cloth.positions:
-                    cpos_writer.write_f32(pos.x, pos.y, pos.z)
+        with clth_writer.create_child("CPOS") as cpos_writer:
+            cpos_writer.write_u32(len(cloth.positions))
+            for pos in cloth.positions:
+                cpos_writer.write_f32(pos.x, pos.y, pos.z)
         # CUV0
-        if cloth.uvs:
-            with clth_writer.create_child("CUV0") as cuv0_writer:
-                cuv0_writer.write_u32(len(cloth.uvs))
-                for uv in cloth.uvs:
-                    cuv0_writer.write_f32(uv[0], uv[1])
+        with clth_writer.create_child("CUV0") as cuv0_writer:
+            cuv0_writer.write_u32(len(cloth.uvs))
+            for uv in cloth.uvs:
+                cuv0_writer.write_f32(uv[0], uv[1])
         # CMSH
-        if cloth.triangles:
-            with clth_writer.create_child("CMSH") as cmsh_writer:
-                cmsh_writer.write_u32(len(cloth.triangles))
-                for tri in cloth.triangles:
-                    cmsh_writer.write_u32(tri[0], tri[1], tri[2])
+        with clth_writer.create_child("CMSH") as cmsh_writer:
+            cmsh_writer.write_u32(len(cloth.triangles))
+            for tri in cloth.triangles:
+                cmsh_writer.write_u32(tri[0], tri[1], tri[2])
         # FIDX
-        if cloth.fixed_points:
-            with clth_writer.create_child("FIDX") as fidx_writer:
-                fidx_writer.write_u32(len(cloth.fixed_points))
-                for index in cloth.fixed_points:
-                    fidx_writer.write_u32(index)
+        with clth_writer.create_child("FIDX") as fidx_writer:
+            fidx_writer.write_u32(len(cloth.fixed_points))
+            for index in cloth.fixed_points:
+                fidx_writer.write_u32(index)
         # FWGT
-        if cloth.fixed_weights_bones:
-            with clth_writer.create_child("FWGT") as fwgt_writer:
-                fwgt_writer.write_u32(len(cloth.fixed_weights_bones))
-                for bone_name in cloth.fixed_weights_bones:
-                    fwgt_writer.write_string(bone_name)
+        with clth_writer.create_child("FWGT") as fwgt_writer:
+            fwgt_writer.write_u32(len(cloth.fixed_weights_bones))
+            for bone_name in cloth.fixed_weights_bones:
+                fwgt_writer.write_string(bone_name)
         # SPRS
         if cloth.stretch_constraints:
             with clth_writer.create_child("SPRS") as sprs_writer:
