@@ -238,9 +238,13 @@ Serious bug with many possible causes, please notify a dev.
 
 If the .msh model to be imported has nodes with meshes that are weighted to or animated, the mesh data on that node will be lost upon import. This is because nodes that are weighted to or animated must be converted to bones in an armature, and bones in an armature cannot be meshes.  Eventually we will add functionality to preserve the mesh as a specially named child object of the relevant armature bone.
 
-#### Normals and vertex colors
+#### Normals
 
-Normals and vertex colors are currently not imported.  Normals will be calculated by Blender.
+Normals are currently not imported.  Normals will be re-calculated by Blender.
+
+#### Vertices
+
+Oftentimes duplicate vertices will be present on msh files, upon import these duplicates will be merged with a distance threshold of 0.0001.
 
 ## Cloth
 
