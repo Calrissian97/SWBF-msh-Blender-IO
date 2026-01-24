@@ -135,7 +135,6 @@ def extract_models(scene: Scene, materials_map : Dict[str, bpy.types.Material]) 
     return model_map
 
 
-# TODO: Add to custom material info struct, maybe some material conversion/import?
 def extract_materials(folder_path: str, scene: Scene) -> Dict[str, bpy.types.Material]:
 
     extracted_materials : Dict[str, bpy.types.Material] = {}
@@ -147,7 +146,6 @@ def extract_materials(folder_path: str, scene: Scene) -> Dict[str, bpy.types.Mat
     return extracted_materials
 
 
-#TODO: Examine cloth collision parenting
 def extract_scene(filepath: str, scene: Scene):
 
     folder = os.path.join(os.path.dirname(filepath),"")
