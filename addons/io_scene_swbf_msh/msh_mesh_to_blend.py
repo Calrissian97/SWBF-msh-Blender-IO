@@ -194,5 +194,17 @@ def model_to_mesh_object(model: Model, scene : Scene, materials_map : Dict[str, 
 
                 vertex_groups_indicies[index].add([offset + i], weight.weight, 'ADD')
 
+    # Cleanup mesh (Duplicate vertices, normals)
+    if model.geometry:
+        bm = bmesh.new()
+        bm.from_mesh(blender_mesh)
+        
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
+
+        for layer in list(bm.loops.layers.float_vector.values()):
+            bm.loops.layers.float_vector.remove(layer)
+
+        bm.to_mesh(blender_mesh)
+        bm.free()
 
     return blender_mesh_object
