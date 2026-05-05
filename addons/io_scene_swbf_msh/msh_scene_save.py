@@ -240,7 +240,7 @@ def _write_bprs(bprs_writer: Writer, constraints: List[List[int]]):
         bprs_writer.write_u16(constraint[0], constraint[1])
 
 
-def _write_coll(coll_writer: Writer, collision_objects: List[CollisionPrimitive]):
+def _write_coll(coll_writer: Writer, collision_objects: List[ClothCollisionPrimitive]):
     """ Writes a COLL chunk for cloth. """
     coll_writer.write_u32(len(collision_objects))
     for prim in collision_objects:

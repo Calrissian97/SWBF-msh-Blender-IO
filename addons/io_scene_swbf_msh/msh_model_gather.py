@@ -264,8 +264,8 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
                 
                 cloth.collision_objects.append(prim)
 
-    # If empty swbf_msh_cloth_collisions property, search entire scene
-    if not names:
+    # Fallback: if no valid collision objects were found via the property, search the entire scene.
+    if not cloth.collision_objects:
         for obj in bpy.context.scene.objects:
             if get_is_cloth_collision_primitive(obj):
                 prim = get_cloth_collision_primitive(obj)
