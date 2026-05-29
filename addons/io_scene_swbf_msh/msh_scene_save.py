@@ -255,7 +255,7 @@ def _write_coll(coll_writer: Writer, collision_objects: List[ClothCollisionPrimi
             coll_writer.write_f32(prim.radius, prim.height, prim.radius)
 
         elif prim.shape == ClothCollisionPrimitiveShape.BOX:
-            coll_writer.write_f32(prim.radius, prim.length, prim.height)
+            coll_writer.write_f32(prim.radius, prim.height, prim.length)
 
 
 def _write_tran(tran: Writer, transform: ModelTransform):

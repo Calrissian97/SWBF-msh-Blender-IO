@@ -32,7 +32,7 @@ def validate_segment_geometry(segment : GeometrySegment):
     return True
 
 
-def model_to_mesh_object(model: Model, scene : Scene, materials_map : Dict[str, bpy.types.Material]) -> bpy.types.Object:
+def model_to_mesh_object(model: Model, scene : Scene, materials_map : Dict[str, bpy.types.Material], preserve_normals: bool) -> bpy.types.Object:
 
     blender_mesh = bpy.data.meshes.new(model.name)
 
@@ -196,15 +196,16 @@ def model_to_mesh_object(model: Model, scene : Scene, materials_map : Dict[str, 
 
     # Cleanup mesh (Duplicate vertices, normals)
     if model.geometry:
-        bm = bmesh.new()
-        bm.from_mesh(blender_mesh)
-        
-        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
+        if not preserve_normals:
+            bm = bmesh.new()
+            bm.from_mesh(blender_mesh)
+            
+            bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
 
-        for layer in list(bm.loops.layers.float_vector.values()):
-            bm.loops.layers.float_vector.remove(layer)
+            for layer in list(bm.loops.layers.float_vector.values()):
+                bm.loops.layers.float_vector.remove(layer)
 
-        bm.to_mesh(blender_mesh)
-        bm.free()
+            bm.to_mesh(blender_mesh)
+            bm.free()
 
     return blender_mesh_object
