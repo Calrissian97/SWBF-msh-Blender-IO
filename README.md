@@ -3,6 +3,9 @@
 
 ### Changes from Original
 This fork of PrismaticFlower's addon adds support for importing/exporting cloth, see the [Cloth section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#cloth) of the reference manual for details.
+Duplicate vertices are merged while preserving custom normals where possible.
+Scene names are read from the MSH and the Blender scene name is set accordingly. It is preserved upon exporting.
+This fork also provides support for Blender 5.0+ by updating animation import/export.
 
 ### Installing
 You install it like any other Blender addon, if you already know how to do that then great! Else head over [here](https://docs.blender.org/manual/en/3.0/editors/preferences/addons.html#installing-add-ons) to learn how to do it in Blender 3.0.
