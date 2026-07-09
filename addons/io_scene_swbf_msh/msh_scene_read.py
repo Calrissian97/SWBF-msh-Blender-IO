@@ -291,6 +291,30 @@ def _read_modl(modl: Reader, materials_list: List[Material]) -> Model:
     return model
 
 
+def _read_shdw(shdw_reader: Reader) -> Shadow:
+    """ Reads a SHDW chunk for BF1 static shadowvolumes """
+    shadow = Shadow()
+    num_positions = shdw_reader.read_u32()
+
+    for _ in range(num_positions):
+        shadow.positions.append(Vector(shdw_reader.read_f32(3)))
+
+    num_edges = shdw_reader.read_u32()
+
+    for _ in range(num_edges):
+        vertex_index = shdw_reader.read_u16()
+        next_index = shdw_reader.read_u16()
+        opposite_index = shdw_reader.read_u16()
+        edge_end = shdw_reader.read_u16()
+
+        if edge_end != 65535:
+            raise ValueError("End expected when parsing SHDW, instead read: " + edge_end)
+
+        shadow.edges.append([vertex_index, next_index, opposite_index])
+
+    return shadow
+
+
 def _read_clth(clth_reader: Reader, model_name: str) -> Cloth:
     """ Reads a CLTH chunk and its children. """
     cloth = Cloth()
@@ -495,6 +519,10 @@ def _read_segm(segm: Reader, materials_list: List[Material]) -> GeometrySegment:
                             weight_set.append(VertexWeight(value,index))
 
                     geometry_seg.weights.append(weight_set)
+
+        elif next_header == "SHDW":
+            with segm.read_child() as shdw:
+                geometry_seg.shadow = _read_shdw(shdw)
 
         else:
             segm.skip_bytes(1)
