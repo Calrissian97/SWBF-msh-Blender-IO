@@ -1,7 +1,7 @@
 bl_info = {
     'name': 'SWBF .msh Import-Export',
     'author': 'Will Snyder, PrismaticFlower, Landon Hull aka Calrissian97',
-    "version": (1, 4, 2),
+    "version": (1, 4, 3),
     'blender': (4, 4, 1),
     'location': 'File > Import-Export',
     'description': 'Import/Export .msh files for Star Wars Battlefront I/II (2004/2005).',
@@ -185,13 +185,6 @@ class ImportMSH(Operator, ImportHelper):
         default=False
     )
 
-    preserve_normals: BoolProperty(
-        name="Preserve Normals",
-        description="When checked, duplicate vertices will not be merged, and custom normals will be preserved. "
-                    "This can lead to a higher vertex count but maintains original shading.",
-        default=False
-    )
-
 
     def execute(self, context):
         dirname = os.path.dirname(self.filepath)
@@ -204,7 +197,7 @@ class ImportMSH(Operator, ImportHelper):
                     scene = read_scene(input_file, self.animation_only) 
 
                 if not self.animation_only:
-                    extract_scene(filepath, scene, self.preserve_normals)
+                    extract_scene(filepath, scene)
                 else:
                     extract_and_apply_anim(filepath, scene)
 

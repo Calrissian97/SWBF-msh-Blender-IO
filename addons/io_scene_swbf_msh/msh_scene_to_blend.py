@@ -25,7 +25,7 @@ def apply_transform(obj: bpy.types.Object, transform: ModelTransform):
 
 
 # Create the msh hierachy.  Armatures are not created here.
-def extract_models(scene: Scene, materials_map : Dict[str, bpy.types.Material], preserve_normals: bool) -> Dict[str, bpy.types.Object]:
+def extract_models(scene: Scene, materials_map : Dict[str, bpy.types.Material]) -> Dict[str, bpy.types.Object]:
 
     # This will be filled with model names -> Blender objects and returned
     model_map : Dict[str, bpy.types.Object] = {}
@@ -111,7 +111,7 @@ def extract_models(scene: Scene, materials_map : Dict[str, bpy.types.Material], 
                 new_obj.data.materials.append(blender_material)
 
         elif model.geometry:
-            new_obj = model_to_mesh_object(model, scene, materials_map, preserve_normals)
+            new_obj = model_to_mesh_object(model, scene, materials_map)
 
         else:
             new_obj = bpy.data.objects.new(model.name, None)
@@ -146,7 +146,7 @@ def extract_materials(folder_path: str, scene: Scene) -> Dict[str, bpy.types.Mat
     return extracted_materials
 
 
-def extract_scene(filepath: str, scene: Scene, preserve_normals: bool):
+def extract_scene(filepath: str, scene: Scene):
 
     folder = os.path.join(os.path.dirname(filepath),"")
 
@@ -154,7 +154,7 @@ def extract_scene(filepath: str, scene: Scene, preserve_normals: bool):
     material_map = extract_materials(folder, scene)
 
     # model_map maps Model names to Blender objects. #
-    model_map = extract_models(scene, material_map, preserve_normals) #
+    model_map = extract_models(scene, material_map) #
 
 
     # skel contains all models needed in an armature

@@ -32,7 +32,7 @@ def validate_segment_geometry(segment : GeometrySegment):
     return True
 
 
-def model_to_mesh_object(model: Model, scene : Scene, materials_map : Dict[str, bpy.types.Material], preserve_normals: bool) -> bpy.types.Object:
+def model_to_mesh_object(model: Model, scene : Scene, materials_map : Dict[str, bpy.types.Material]) -> bpy.types.Object:
 
     blender_mesh = bpy.data.meshes.new(model.name)
 
@@ -196,16 +196,59 @@ def model_to_mesh_object(model: Model, scene : Scene, materials_map : Dict[str, 
 
     # Cleanup mesh (Duplicate vertices, normals)
     if model.geometry:
-        if not preserve_normals:
-            bm = bmesh.new()
-            bm.from_mesh(blender_mesh)
-            
-            bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
+        # 1. Store original custom loop normals mapped by a rounded vertex coordinate
+        custom_normal_map = {}
+        
+        for poly in blender_mesh.polygons:
+            for loop_idx in poly.loop_indices:
+                loop = blender_mesh.loops[loop_idx]
+                vert = blender_mesh.vertices[loop.vertex_index]
+                v_key = tuple(round(c, 4) for c in vert.co)
+                
+                # Fetch normal data
+                corner_normal = blender_mesh.corner_normals[loop_idx].vector
+                
+                if v_key not in custom_normal_map:
+                    custom_normal_map[v_key] = []
+                custom_normal_map[v_key].append((corner_normal.copy(), poly.normal.copy()))
 
-            for layer in list(bm.loops.layers.float_vector.values()):
-                bm.loops.layers.float_vector.remove(layer)
+        # 2. Perform the BMesh background cleanup safely
+        bm = bmesh.new()
+        bm.from_mesh(blender_mesh)
+        
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
 
-            bm.to_mesh(blender_mesh)
-            bm.free()
+        for layer in list(bm.loops.layers.float_vector.values()):
+            bm.loops.layers.float_vector.remove(layer)
+
+        bm.to_mesh(blender_mesh)
+        bm.free()
+
+        # 3. Project preserved custom normals back onto the newly welded topology
+        new_loop_normals = []
+        
+        for poly in blender_mesh.polygons:
+            for loop_idx in poly.loop_indices:
+                loop = blender_mesh.loops[loop_idx]
+                vert = blender_mesh.vertices[loop.vertex_index]
+                v_key = tuple(round(c, 4) for c in vert.co)
+                
+                # Use the newly cached corner normal as a base fallback
+                matched_normal = blender_mesh.corner_normals[loop_idx].vector
+                
+                if v_key in custom_normal_map:
+                    # Find the closest matching face normal to preserve the sharp edge boundary
+                    best_dot = -1.0
+                    for orig_loop_norm, orig_poly_norm in custom_normal_map[v_key]:
+                        dot = poly.normal.dot(orig_poly_norm)
+                        if dot > best_dot:
+                            best_dot = dot
+                            matched_normal = orig_loop_norm
+                
+                new_loop_normals.append(matched_normal)
+                
+        # 4. Set the reconstructed custom split normals back into the mesh
+        if new_loop_normals:
+            blender_mesh.normals_split_custom_set(new_loop_normals)
 
     return blender_mesh_object
