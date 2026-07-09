@@ -32,6 +32,62 @@ def validate_segment_geometry(segment : GeometrySegment):
     return True
 
 
+def shadow_to_mesh_object(model: Model) -> bpy.types.Object:
+    """ Forms a blender mesh from SHDW chunk data """
+
+    blender_mesh = bpy.data.meshes.new(model.name)
+
+    # Convert and collect vertices
+    vertex_positions = [tuple(convert_vector_space(p)) for p in model.geometry[0].shadow.positions]
+
+    # Reconstruct faces from the half-edge data
+    faces = []
+    visited_edges = set()
+    edges_data = model.geometry[0].shadow.edges 
+
+    for start_edge_idx in range(len(edges_data)):
+        if start_edge_idx in visited_edges:
+            continue
+            
+        face_vertices = []
+        current_edge_idx = start_edge_idx
+        
+        # Follow the pointer chain around the boundary of the face
+        while current_edge_idx not in visited_edges:
+            visited_edges.add(current_edge_idx)
+            
+            curr_edge = edges_data[current_edge_idx]
+            
+            # curr_edge[0] is the vertex index this half-edge originates from
+            face_vertices.append(curr_edge[0])
+            
+            # curr_edge[1] is actually the NEXT EDGE INDEX in this face loop
+            next_edge_idx = curr_edge[1]
+            
+            # Safety check: if the file data points to an invalid index, break
+            if next_edge_idx >= len(edges_data) or next_edge_idx is None:
+                break
+                
+            current_edge_idx = next_edge_idx
+            
+            # If we've looped back to the starting edge, the face is complete
+            if current_edge_idx == start_edge_idx:
+                break
+                
+        # Only add valid polygons (at least 3 vertices)
+        if len(face_vertices) >= 3:
+            faces.append(face_vertices)
+
+    # Populate Blender Mesh
+    blender_mesh.from_pydata(vertex_positions, [], faces)
+    blender_mesh.update()
+
+    # Add new blender object with blender_mesh data
+    blender_mesh_object = bpy.data.objects.new(model.name, blender_mesh)
+
+    return blender_mesh_object
+
+
 def model_to_mesh_object(model: Model, scene : Scene, materials_map : Dict[str, bpy.types.Material]) -> bpy.types.Object:
 
     blender_mesh = bpy.data.meshes.new(model.name)
