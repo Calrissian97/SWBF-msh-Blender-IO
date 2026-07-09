@@ -48,6 +48,12 @@ class VertexWeight:
 
 
 @dataclass
+class Shadow:
+    positions: List[Vector] = field(default_factory=list)
+    edges: List[List[int]] = field(default_factory=list)
+
+
+@dataclass
 class GeometrySegment:
     """ Class representing a 'SEGM' section in a .msh file. """
 
@@ -63,6 +69,7 @@ class GeometrySegment:
     polygons: List[List[int]] = field(default_factory=list)
     triangles: List[List[int]] = field(default_factory=list)
     triangle_strips: List[List[int]] = None
+    shadow: Optional[Shadow] = None
 
 
 @dataclass
@@ -99,7 +106,7 @@ class Cloth:
     cross_constraints: List[List[int]] = field(default_factory=list)
     bend_constraints: List[List[int]] = field(default_factory=list)
     collision_objects: List['ClothCollisionPrimitive'] = field(default_factory=list)
-    
+
 
 @dataclass
 class Model:
