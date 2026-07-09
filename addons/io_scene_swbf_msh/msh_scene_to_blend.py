@@ -13,7 +13,7 @@ from .msh_model import *
 from .msh_skeleton_utilities import *
 from .msh_skeleton_to_blend import *
 from .msh_model_gather import get_is_model_hidden
-from .msh_mesh_to_blend import model_to_mesh_object
+from .msh_mesh_to_blend import model_to_mesh_object, shadow_to_mesh_object
 from .msh_model_utilities import convert_vector_space, convert_rotation_space
 from .crc import *
 
@@ -111,7 +111,10 @@ def extract_models(scene: Scene, materials_map : Dict[str, bpy.types.Material]) 
                 new_obj.data.materials.append(blender_material)
 
         elif model.geometry:
-            new_obj = model_to_mesh_object(model, scene, materials_map)
+            if model.geometry[0].shadow:
+                new_obj = shadow_to_mesh_object(model)
+            else:
+                new_obj = model_to_mesh_object(model, scene, materials_map)
 
         else:
             new_obj = bpy.data.objects.new(model.name, None)
