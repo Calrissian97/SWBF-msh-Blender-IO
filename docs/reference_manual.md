@@ -240,7 +240,7 @@ If the .msh model to be imported has nodes with meshes that are weighted to or a
 
 #### Normals
 
-Normals are currently not imported.  Normals will be re-calculated by Blender.
+Normals are preserved where possible, though there may be edge-cases where Blender will recalculate them.
 
 #### Vertices
 
