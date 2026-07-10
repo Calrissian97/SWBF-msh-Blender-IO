@@ -269,17 +269,19 @@ SWBF2 uses cloth collision primitives, not unlike regular [Collision Primitives]
 Cloth collision primitives can be parented similarly to the cloth mesh, with it's parent the Armature and Parent Bone set to the bone it should move with (default importer behavior), or simply parented to the dummyroot or any msh scene object. It should also be noted that they should not have their transforms or scaling applied or they will simply match the transform and scale of the dummyroot upon export, just like regular collision primitives.
 
 ## Shadow Volumes
-SWBF's rendering engine uses Shadow Volumes for it's shadows. What this means is that the mesh for the shadow is seperate and different from the main mesh. And in order for your model to have shadows you must make the shadow mesh. 
+SWBF's rendering engine uses Shadow Volumes for it's stencil-shadows. What this means is that the mesh for the shadow is separate and different from the main mesh. And in order for your model to have shadows you must make the shadow mesh. 
 
 modelmunge will handle the actual Shadow Volume generation for you. You just have to make sure you follow a couple rules.
 
-The first is that any shadow mesh in your scene should begin with "sv_", this will mark it as a Shadow Volume.
+For SWBF1 static Shadow Volumes, the name of the object(s) must start with "shadowvolume". If there are multiple, name them "shadowvolume1", "shadowvolume2", ...
+
+For SWBF1 dynamic Shadow Volumes / SWBF2 Shadow Volumes, the name of the object(s) must start with "sv_".
 
 Next your the mesh for your Shadow Volume should form a completely enclosed mesh. It should have no gaps that let you see inside it.
 
 Finally because of the way Shadow Volumes work for performance concerns it can be advisable to not have your shadow mesh be full detail and instead have it be a reasonable (and believeable of course) low-resolution approxomation of your real mesh.
 
-That's all there is to it. Basically just make sure your shadow meshes' object names start with "sv_", they're enclosed and not wasteful with their polygons. The exporter and then modelmunge will take care of everything from there.
+That's all there is to it. Basically just make sure your shadow meshes' object names start with "sv_" or "shadowvolume", they're enclosed, and not wasteful with their polygons. The exporter and then modelmunge will take care of everything from there.
 
 ## Terrain Cutters
 In .msh files any object starting with "terraincutter" results in it "cutting" terrain when it is used as a prop in Zero Editor. Below the results of this can be seen for a cube named "terraincutter_Cube".
