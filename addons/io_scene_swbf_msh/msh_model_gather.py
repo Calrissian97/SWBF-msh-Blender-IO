@@ -131,21 +131,24 @@ def gather_models(apply_modifiers: bool, export_target: str, skeleton_only: bool
 
             if model.model_type != ModelType.CLOTH:
                 mesh = obj.to_mesh()
-                model.geometry = create_mesh_geometry(mesh, valid_vgroup_indices)
+                if model.model_type == ModelType.SHADOWVOLUME:
+                    model.geometry = create_shadow_geometry(mesh)
+                else:
+                    model.geometry = create_mesh_geometry(mesh, valid_vgroup_indices)
 
             obj.to_mesh_clear()
 
             _, _, world_scale = obj.matrix_world.decompose()
             world_scale = convert_scale_space(world_scale)
-            if model.geometry:
+            if model.geometry and model.model_type != ModelType.SHADOWVOLUME:
                 scale_segments(world_scale, model.geometry)
 
-            if model.geometry:
+            if model.geometry and model.model_type != ModelType.SHADOWVOLUME:
                 for segment in model.geometry:
                     if len(segment.positions) > MAX_MSH_VERTEX_COUNT:
                         raise RuntimeError(f"Object '{obj.name}' has resulted in a .msh geometry segment that has "
-                                           f"more than {MAX_MSH_VERTEX_COUNT} vertices! Split the object's mesh up "
-                                           f"and try again!")
+                                        f"more than {MAX_MSH_VERTEX_COUNT} vertices! Split the object's mesh up "
+                                        f"and try again!")
 
         if get_is_collision_primitive(obj):
             model.collisionprimitive = get_collision_primitive(obj)
@@ -410,6 +413,63 @@ def create_parents_set() -> Set[str]:
     return parents
 
 
+def create_shadow_geometry(mesh: bpy.types.Mesh) -> List[GeometrySegment]:
+    """ Creates a single SEGM for the MODL with a SHDW chunk """
+
+    segm = GeometrySegment()
+    shdw = Shadow()
+    segm.shadow = shdw
+
+    # Ensure Blender's internal topology data is fully calculated and up to date
+    mesh.update()
+
+    # Assign vertex positions in correct space
+    shdw.positions = [convert_vector_space(v.co.copy()) for v in mesh.vertices]
+
+    # Safety Check: Enforce the u16 limit from your writer
+    if len(mesh.loops) > 65535:
+        raise ValueError(f"Mesh '{mesh.name}' is too dense! It has {len(mesh.loops)} half-edges, exceeding the 65,535 limit.")
+
+    # Pre-allocate the edges list to the exact size of Blender's loops
+    shdw.edges = [None] * len(mesh.loops)
+
+    # 2. Map physical edges to find the "Opposite Edge" (edge[2]) instantly
+    # This dictionary groups half-edge indices by the physical edge they share.
+    edge_to_loops = {i: [] for i in range(len(mesh.edges))}
+    for loop in mesh.loops:
+        edge_to_loops[loop.edge_index].append(loop.index)
+
+    # 3. Build the Half-Edge Data
+    for poly in mesh.polygons:
+        # poly.loop_indices contains the ordered half-edges that make up this face
+        loop_indices = poly.loop_indices
+        num_loops = len(loop_indices)
+        
+        for i, loop_idx in enumerate(loop_indices):
+            loop = mesh.loops[loop_idx]
+            
+            # edge[0]: Origin vertex index of this half-edge
+            origin_vertex = loop.vertex_index
+            
+            # edge[1]: Next half-edge index in the face loop
+            # We use modulo to wrap around to the first loop when we hit the end of the face
+            next_loop_idx = loop_indices[(i + 1) % num_loops]
+            
+            # edge[2]: Opposite edge index (Twin)
+            sharing_loops = edge_to_loops[loop.edge_index]
+            opposite_loop_idx = 65535  # Default for open boundaries (no opposite)
+            
+            for shared_idx in sharing_loops:
+                if shared_idx != loop_idx:
+                    opposite_loop_idx = shared_idx
+                    break  # Take the first adjacent one we find
+                    
+            # Populate the pre-allocated list
+            shdw.edges[loop_idx] = [origin_vertex, next_loop_idx, opposite_loop_idx]
+
+    return [segm]
+
+
 def create_mesh_geometry(mesh: bpy.types.Mesh, valid_vgroup_indices: Set[int]) -> List[GeometrySegment]:
     """ Creates a list of GeometrySegment objects from a Blender mesh.
         Does NOT create triangle strips in the GeometrySegment however. """
@@ -529,6 +589,9 @@ def get_model_type(obj: bpy.types.Object, armature_found: bpy.types.Object) -> M
     if "Pin" in obj.vertex_groups.keys():
         return ModelType.CLOTH
 
+    if obj.name.lower().startswith("shadowvolume"):
+        return ModelType.SHADOWVOLUME
+
     if obj.type in MESH_OBJECT_TYPES:
         # Objects can have vgroups for non-skinning purposes.
         # If we can find one vgroup that shares a name with a bone in the 
@@ -566,6 +629,8 @@ def get_is_model_hidden(obj: bpy.types.Object) -> bool:
     if name.startswith("c_"):
         return True
     if name.startswith("sv_"):
+        return True
+    if name.startswith("shadowvolume"):
         return True
     if name.startswith("p_"):
         return True
