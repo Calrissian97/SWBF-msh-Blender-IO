@@ -266,62 +266,76 @@ def _write_tran(tran: Writer, transform: ModelTransform):
 
 def _write_segm(segm: Writer, segment: GeometrySegment, material_index: Dict[str, int]):
 
-    with segm.create_child("MATI") as mati:
-        mati.write_u32(material_index.get(segment.material_name, 0))
+    if segment.shadow:
+        with segm.create_child("SHDW") as shdw:
+            _write_shdw(shdw, segment.shadow)
+    else:
+        with segm.create_child("MATI") as mati:
+            mati.write_u32(material_index.get(segment.material_name, 0))
 
-    with segm.create_child("POSL") as posl:
-        posl.write_u32(len(segment.positions))
+        with segm.create_child("POSL") as posl:
+            posl.write_u32(len(segment.positions))
 
-        for position in segment.positions:
-            posl.write_f32(position.x, position.y, position.z)
+            for position in segment.positions:
+                posl.write_f32(position.x, position.y, position.z)
 
-    if segment.weights:
-        with segm.create_child("WGHT") as wght:
-            _write_wght(wght, segment.weights)
+        if segment.weights:
+            with segm.create_child("WGHT") as wght:
+                _write_wght(wght, segment.weights)
 
-    with segm.create_child("NRML") as nrml:
-        nrml.write_u32(len(segment.normals))
+        with segm.create_child("NRML") as nrml:
+            nrml.write_u32(len(segment.normals))
 
-        for i,normal in enumerate(segment.normals):
-            nrml.write_f32(normal.x, normal.y, normal.z)
+            for i,normal in enumerate(segment.normals):
+                nrml.write_f32(normal.x, normal.y, normal.z)
 
-    if segment.colors is not None:
-        with segm.create_child("CLRL") as clrl:
-            clrl.write_u32(len(segment.colors))
+        if segment.colors is not None:
+            with segm.create_child("CLRL") as clrl:
+                clrl.write_u32(len(segment.colors))
 
-            for color in segment.colors:
-                clrl.write_u32(pack_color(color))
+                for color in segment.colors:
+                    clrl.write_u32(pack_color(color))
 
-    if segment.texcoords is not None:
-        with segm.create_child("UV0L") as uv0l:
-            uv0l.write_u32(len(segment.texcoords))
+        if segment.texcoords is not None:
+            with segm.create_child("UV0L") as uv0l:
+                uv0l.write_u32(len(segment.texcoords))
 
-            for texcoord in segment.texcoords:
-                uv0l.write_f32(texcoord.x, texcoord.y)
+                for texcoord in segment.texcoords:
+                    uv0l.write_f32(texcoord.x, texcoord.y)
 
-    with segm.create_child("NDXL") as ndxl:
-        ndxl.write_u32(len(segment.polygons))
+        with segm.create_child("NDXL") as ndxl:
+            ndxl.write_u32(len(segment.polygons))
 
-        for polygon in segment.polygons:
-            ndxl.write_u16(len(polygon))
+            for polygon in segment.polygons:
+                ndxl.write_u16(len(polygon))
 
-            for index in polygon:
-                ndxl.write_u16(index)
+                for index in polygon:
+                    ndxl.write_u16(index)
 
-    with segm.create_child("NDXT") as ndxt:
-        ndxt.write_u32(len(segment.triangles))
+        with segm.create_child("NDXT") as ndxt:
+            ndxt.write_u32(len(segment.triangles))
 
-        for triangle in segment.triangles:
-            ndxt.write_u16(triangle[0], triangle[1], triangle[2])
+            for triangle in segment.triangles:
+                ndxt.write_u16(triangle[0], triangle[1], triangle[2])
 
-    with segm.create_child("STRP") as strp:
-        strp.write_u32(sum(len(strip) for strip in segment.triangle_strips))
+        with segm.create_child("STRP") as strp:
+            strp.write_u32(sum(len(strip) for strip in segment.triangle_strips))
 
-        for strip in segment.triangle_strips:
-            strp.write_u16(strip[0] | 0x8000, strip[1] | 0x8000)
+            for strip in segment.triangle_strips:
+                strp.write_u16(strip[0] | 0x8000, strip[1] | 0x8000)
 
-            for index in islice(strip, 2, len(strip)):
-                strp.write_u16(index)
+                for index in islice(strip, 2, len(strip)):
+                    strp.write_u16(index)
+
+
+def _write_shdw(shdw: Writer, shadow: Shadow):
+    """ Writes a SHDW chunk as child of a SEGM """
+    shdw.write_u32(len(shadow.positions))
+    for position in shadow.positions:
+        shdw.write_f32(position.x, position.y, position.z)
+    shdw.write_u32(len(shadow.edges))
+    for edge in shadow.edges:
+        shdw.write_u16(edge[0], edge[1], edge[2], 65535)
 
 
 '''
