@@ -49,7 +49,7 @@ def create_scene(generate_triangle_strips: bool, apply_modifiers: bool, export_t
         scene.models = create_models_triangle_strips(scene.models)
     else:
         for model in scene.models:
-            if model.geometry:
+            if model.geometry and model.model_type != ModelType.SHADOWVOLUME:
                 for segment in model.geometry:
                     segment.triangle_strips = segment.triangles
 
@@ -63,7 +63,10 @@ def create_scene(generate_triangle_strips: bool, apply_modifiers: bool, export_t
         if model.geometry is not None:
             # Doing this in msh_model_gather would be messy and the presence/absence
             # of triangle strips is required for a validity check.
-            model.geometry = [segment for segment in model.geometry if validate_geometry_segment(segment)]
+            if model.model_type == ModelType.SHADOWVOLUME:
+                model.geometry = [model.geometry[0]]
+            else:
+                model.geometry = [segment for segment in model.geometry if validate_geometry_segment(segment)]
             #if not model.geometry:
             #    make_null(model)
 
