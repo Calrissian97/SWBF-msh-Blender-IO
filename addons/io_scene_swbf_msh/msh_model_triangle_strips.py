@@ -8,7 +8,7 @@ def create_models_triangle_strips(models: List[Model]) -> List[Model]:
     """ Create the triangle strips for a list of models geometry. """
 
     for model in models:
-        if model.geometry is not None:
+        if model.geometry is not None and model.model_type != ModelType.SHADOWVOLUME:
             for segment in model.geometry:
                 segment.triangle_strips = create_triangle_strips(segment.triangles)
 
