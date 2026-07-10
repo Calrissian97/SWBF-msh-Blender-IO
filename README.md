@@ -3,6 +3,7 @@
 
 ### Changes from Original
 - This fork of PrismaticFlower's addon adds support for importing/exporting cloth, see the [Cloth section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#cloth) of the reference manual for details.
+- BF1 Shadow Volumes (SHDW) chunk importing/exporting, see the [Shadow Volume section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#shadow-volumes)
 - Duplicate vertices are merged while preserving custom normals where possible.
 - Scene names are read from the MSH and the Blender scene name is set accordingly. It is preserved upon exporting.
 - This fork also provides support for Blender 5.0+ by updating animation import/export.
