@@ -13,7 +13,16 @@ from .crc import *
 def save_scene(output_file, scene: Scene):
     """ Saves scene to the supplied file. """
 
+    has_shadowvolume = False
+    for model in scene.models:
+        if model.geometry[0].shadow:
+            has_shadowvolume = True
+
     with Writer(file=output_file, chunk_id="HEDR") as hedr:
+        if has_shadowvolume == True:
+            with hedr.create_child("SHVO") as shvo:
+                shvo.write_u32(1)
+                
         with hedr.create_child("MSH2") as msh2:
 
             with msh2.create_child("SINF") as sinf:
