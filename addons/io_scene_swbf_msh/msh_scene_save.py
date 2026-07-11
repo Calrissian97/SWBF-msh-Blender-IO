@@ -145,8 +145,9 @@ def _write_modl(modl: Writer, model: Model, index: int, material_index: Dict[str
             prnt.write_string(model.parent)
 
     if model.hidden:
-        with modl.create_child("FLGS") as flgs:
-            flgs.write_u32(1)
+        if model.model_type != ModelType.SHADOWVOLUME:
+            with modl.create_child("FLGS") as flgs:
+                flgs.write_u32(1)
 
     with modl.create_child("TRAN") as tran:
         _write_tran(tran, model.transform)
