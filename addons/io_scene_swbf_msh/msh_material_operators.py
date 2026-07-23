@@ -143,10 +143,6 @@ to provide an exact emulation"""
         name = "Material Name", 
         description = "Name of material whose SWBF properties the generated nodes will emulate."
     )
-
-    fail_silently: BoolProperty(
-        name = "Fail Silently"
-    )
     
 
     def execute(self, context):
@@ -265,12 +261,11 @@ to provide an exact emulation"""
                 
                 material.node_tree.links.new(bsdf.inputs['Normal'], normalsOutputNode.outputs["Normal"]) 
 
-
+            else:
+                self.report({'WARNING', f"Bumpmap/Normalmap not found at \"{mat_props.normal_map}\"!"})
 
             output = material.node_tree.nodes.new("ShaderNodeOutputMaterial")
             material.node_tree.links.new(output.inputs['Surface'], surfaces_output.outputs[0]) 
-
-
 
             # Scrolling
             # This approach works 90% of the time, but notably produces very incorrect results
@@ -279,7 +274,6 @@ to provide an exact emulation"""
             # Clear all anims in all cases
             if material.node_tree.animation_data:
                 material.node_tree.animation_data_clear()
-
 
             if "SCROLL" in mat_props.rendertype:
                 uv_input = material.node_tree.nodes.new("ShaderNodeUVMap")
@@ -296,7 +290,6 @@ to provide an exact emulation"""
 
                     vector_add.inputs[1].default_value[1] = i * mat_props.scroll_speed_v * frame_step / scroll_per_sec_divisor               
                     vector_add.inputs[1].keyframe_insert("default_value", index=1, frame=i * frame_step * fps)
-
 
                 material.node_tree.links.new(vector_add.inputs[0], uv_input.outputs[0])
 
@@ -321,14 +314,7 @@ to provide an exact emulation"""
                                     for kf in fcurve.keyframe_points:
                                         kf.interpolation = 'LINEAR'
 
-        '''
         else:
-
-            # Todo: figure out some way to raise an error but continue operator execution...
-            if self.fail_silently:
-                return {'CANCELLED'}
-            else:
-                raise RuntimeError(f"Diffuse texture at path: '{diffuse_texture_path}' was not found.")
-        '''
+            self.report({'WARNING'}, f"Diffuse texture not found at {diffuse_texture_path}!")
 
         return {'FINISHED'}
