@@ -175,8 +175,15 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
         material = mesh.materials[0]
         texture_found = False
 
+        # Fallback to custom property if no standard texture was found
+        if hasattr(material, 'swbf_msh_mat'):
+            mat_props = material.swbf_msh_mat
+            if mat_props.diffuse_map:
+                cloth.texture = os.path.basename(mat_props.diffuse_map)
+                texture_found = True
+
         # Try to get texture from a standard node setup first
-        if material.use_nodes and material.node_tree:
+        if material.use_nodes and material.node_tree and not texture_found:
             for node in material.node_tree.nodes:
                 if node.type == 'BSDF_PRINCIPLED':
                     base_color_input = node.inputs.get("Base Color")
@@ -187,11 +194,6 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
                             texture_found = True
                             break # Found it
 
-        # Fallback to custom property if no standard texture was found
-        if not texture_found and hasattr(material, 'swbf_msh_mat'):
-            mat_props = material.swbf_msh_mat
-            if mat_props.diffuse_map:
-                cloth.texture = os.path.basename(mat_props.diffuse_map)
     else:
         raise RuntimeError(f"Object '{blender_obj.name}' has no material!")
     
@@ -240,7 +242,7 @@ def cloth_from_object(blender_obj: bpy.types.Object) -> Cloth:
             if any(fixed_weights_bones):
                 cloth.fixed_weights_bones = fixed_weights_bones
         else:
-            raise RuntimeError(f"Object (CLOTH) '{blender_obj.name}' has no pinned vertices!")
+            raise RuntimeError(f"Object (CLOTH) '{blender_obj.name}' has no pinned vertices! Create a \"Pin\" vertex group before exporting!")
 
     # Get collision primitives for this cloth
     raw = blender_obj.get("swbf_msh_cloth_collisions", "[]")
@@ -428,7 +430,7 @@ def create_shadow_geometry(mesh: bpy.types.Mesh) -> List[GeometrySegment]:
 
     # Safety Check: Enforce the u16 limit from your writer
     if len(mesh.loops) > 65535:
-        raise ValueError(f"Mesh '{mesh.name}' is too dense! It has {len(mesh.loops)} half-edges, exceeding the 65,535 limit.")
+        raise OverflowError(f"Mesh '{mesh.name}' is too dense! It has {len(mesh.loops)} half-edges, exceeding the 65,535 limit.")
 
     # Pre-allocate the edges list to the exact size of Blender's loops
     shdw.edges = [None] * len(mesh.loops)
@@ -676,12 +678,6 @@ def get_collision_primitive(obj: bpy.types.Object) -> CollisionPrimitive:
     primitive.shape = get_collision_primitive_shape(obj)
 
     if primitive.shape == CollisionPrimitiveShape.SPHERE:
-        # Tolerate a 5% difference to account for icospheres with 2 subdivisions.
-        if not (math.isclose(obj.dimensions[0], obj.dimensions[1], rel_tol=0.05) and
-                math.isclose(obj.dimensions[0], obj.dimensions[2], rel_tol=0.05)):
-            raise RuntimeError(f"Object '{obj.name}' is being used as a sphere collision "
-                               f"primitive but it's dimensions are not uniform!")
-
         primitive.radius = max(obj.dimensions[0], obj.dimensions[1], obj.dimensions[2]) * 0.5
     elif primitive.shape == CollisionPrimitiveShape.CYLINDER:
         primitive.radius = max(obj.dimensions[0], obj.dimensions[1]) * 0.5
@@ -702,12 +698,6 @@ def get_cloth_collision_primitive(obj: bpy.types.Object) -> ClothCollisionPrimit
     primitive.shape = get_cloth_collision_primitive_shape(obj)
 
     if primitive.shape == ClothCollisionPrimitiveShape.SPHERE:
-        # Tolerate a 5% difference to account for icospheres with 2 subdivisions.
-        if not (math.isclose(obj.dimensions[0], obj.dimensions[1], rel_tol=0.05) and
-                math.isclose(obj.dimensions[0], obj.dimensions[2], rel_tol=0.05)):
-            raise RuntimeError(f"Object '{obj.name}' is being used as a sphere collision "
-                               f"primitive but it's dimensions are not uniform!")
-
         primitive.radius = max(obj.dimensions[0], obj.dimensions[1], obj.dimensions[2]) * 0.5
     elif primitive.shape == ClothCollisionPrimitiveShape.CYLINDER:
         primitive.radius = max(obj.dimensions[0], obj.dimensions[1]) * 0.5
@@ -776,7 +766,7 @@ def get_cloth_collision_primitive_shape(obj: bpy.types.Object) -> ClothCollision
         return ClothCollisionPrimitiveShape.CYLINDER
 
     # XSI Spheres (original and imported/triangulated plus odd varieties found in stock models)
-    if vcount == 58 and fcount == 64 or vcount == 58 and fcount == 112 or vcount == 282 and fcount == 760 or vcount == 554 and fcount == 1104:
+    if vcount == 58 and fcount == 64 or vcount == 58 and fcount == 112 or vcount == 282 and fcount == 760 or vcount == 382 and fcount == 760 or vcount == 554 and fcount == 1104:
         return ClothCollisionPrimitiveShape.SPHERE
     
     # XSI cylinders (original and imported/triangulated)
