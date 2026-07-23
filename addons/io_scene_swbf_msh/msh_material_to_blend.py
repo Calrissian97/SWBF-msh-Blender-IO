@@ -42,7 +42,7 @@ def swbf_material_to_blend(material_name : str, material : Material, folder_path
     
     fill_material_props(material, new_mat.swbf_msh_mat, folder_path)
     
-    bpy.ops.swbf_msh.generate_material_nodes('EXEC_DEFAULT', material_name=new_mat.name, fail_silently=True) 
+    bpy.ops.swbf_msh.generate_material_nodes('EXEC_DEFAULT', material_name=new_mat.name)
 
     return new_mat    
 
