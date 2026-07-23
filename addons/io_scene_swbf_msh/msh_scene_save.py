@@ -15,7 +15,7 @@ def save_scene(output_file, scene: Scene):
 
     has_shadowvolume = False
     for model in scene.models:
-        if model.geometry[0].shadow:
+        if model.geometry and model.geometry[0].shadow:
             has_shadowvolume = True
 
     with Writer(file=output_file, chunk_id="HEDR") as hedr:
