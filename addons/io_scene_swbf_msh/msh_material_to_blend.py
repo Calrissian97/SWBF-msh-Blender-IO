@@ -13,19 +13,23 @@ from math import sqrt
 import os
 
 
-
-
-
 def find_texture_path(folder_path : str, name : str) -> str:
 
     if not folder_path or not name:
         return ""
 
+    # Normalize
+    name_lower = name.lower()
+
+    # Add ".tga" if missing file extension
+    if not name_lower.endswith(".tga"):
+        name_lower += ".tga"
+
     possible_paths = [
-        os.path.join(folder_path, name),
-        os.path.join(folder_path, "PC", name),
-        os.path.join(folder_path, "pc", name),
-        os.path.join(folder_path, ".." , name),
+        os.path.join(folder_path, name_lower),
+        os.path.join(folder_path, "PC", name_lower),
+        os.path.join(folder_path, "pc", name_lower),
+        os.path.join(folder_path, ".." , name_lower),
     ]  
 
     for possible_path in possible_paths:
@@ -33,7 +37,6 @@ def find_texture_path(folder_path : str, name : str) -> str:
             return possible_path
 
     return name
-
 
 
 def swbf_material_to_blend(material_name : str, material : Material, folder_path : str) -> bpy.types.Material:
@@ -45,7 +48,6 @@ def swbf_material_to_blend(material_name : str, material : Material, folder_path
     bpy.ops.swbf_msh.generate_material_nodes('EXEC_DEFAULT', material_name=new_mat.name)
 
     return new_mat    
-
 
 
 def fill_material_props(material, material_properties, folder_path):
@@ -62,7 +64,6 @@ def fill_material_props(material, material_properties, folder_path):
     _fill_material_props_flags(material, material_properties)
     _fill_material_props_data(material, material_properties)
     _fill_material_props_texture_maps(material, material_properties, folder_path)
-
 
 
 def _fill_material_props_rendertype(material, material_properties):
@@ -133,5 +134,3 @@ def _fill_material_props_texture_maps(material, material_properties, folder_path
     material_properties.normal_map = t1path
     material_properties.detail_map = t2path
     material_properties.environment_map = t3path
-
-
