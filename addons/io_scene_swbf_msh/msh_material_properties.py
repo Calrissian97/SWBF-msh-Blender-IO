@@ -8,14 +8,13 @@ from .msh_material import *
 from .msh_material_ui_strings import *
 from .msh_material_utilities import _REVERSE_RENDERTYPES_MAPPING
 
-
 from .msh_material_operators import GenerateMaterialNodesFromSWBFProperties
-
 
 
 UI_MATERIAL_RENDERTYPES = (
     ('NORMAL_BF2', "00 Standard (SWBF2)", UI_RENDERTYPE_NORMAL_BF2_DESC),
     ('SCROLLING_BF2', "03 Scrolling (SWBF2)", UI_RENDERTYPE_SCROLLING_BF2_DESC),
+    ('GLOSSMAPPED', "04 Glossmapped", UI_RENDERTYPE_GLOSS_MAP_DESC),
     ('ENVMAPPED_BF2', "06 Envmapped (SWBF2)", UI_RENDERTYPE_ENVMAPPED_BF2_DESC),
     ('ANIMATED_BF2', "07 Animated (SWBF2)", UI_RENDERTYPE_ANIMATED_BF2_DESC),
     ('REFRACTION_BF2', "22 Refractive (SWBF2)", UI_RENDERTYPE_REFRACTION_BF2_DESC),
@@ -23,6 +22,7 @@ UI_MATERIAL_RENDERTYPES = (
     ('NORMALMAPPED_TILED_BF2', "24 Normalmapped Tiled (SWBF2)", UI_RENDERTYPE_NORMALMAPPED_TILED_BF2_DESC),
     ('NORMALMAPPED_ENVMAPPED_BF2', "26 Normalmapped Envmapped (SWBF2)", UI_RENDERTYPE_NORMALMAPPED_ENVMAPPED_BF2_DESC),
     ('NORMALMAPPED_BF2', "27 Normalmapped (SWBF2)", UI_RENDERTYPE_NORMALMAPPED_BF2_DESC),
+    ('NORMALMAPPED_GLOSSMAPPED_BF2', "28 Normalmapped Glossmapped (SWBF2)", UI_RENDERTYPE_NORMALMAPPED_GLOSSMAPPED_BF2_DESC),
     ('NORMALMAPPED_TILED_ENVMAPPED_BF2', "29 Normalmapped Tiled Envmapped (SWBF2)", UI_RENDERTYPE_NORMALMAPPED_TILED_ENVMAPPED_BF2_DESC),
     ('UNSUPPORTED', "Other (SWBF1/2)", UI_RENDERTYPE_UNSUPPORTED_BF2_DESC))
 
@@ -188,7 +188,7 @@ class MaterialProperties(PropertyGroup):
 
     environment_map: StringProperty(name="Environment Map",
                                     description="Environment map for the material. Provides static "
-                                                "reflections around the surface. Must be a cubemap.",
+                                                "reflections around the surface. Must be a cubemap with '-cubemap' in it's '.tga.option' file.",
                                     subtype='FILE_PATH')
 
     distortion_map: StringProperty(name="Distortion Map",
@@ -216,8 +216,7 @@ class MaterialPropertiesPanel(bpy.types.Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "material"
-
-
+    
 
     def draw(self, context):
         if context.material is None:
