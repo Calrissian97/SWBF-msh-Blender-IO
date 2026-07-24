@@ -10,6 +10,7 @@ class Rendertype(Enum):
     # TODO: Add SWBF1 rendertypes.
     NORMAL = 0
     SCROLLING = 3
+    GLOSSMAPPED = 4
     ENVMAPPED = 6
     ANIMATED = 7
     REFRACTION = 22
@@ -17,12 +18,12 @@ class Rendertype(Enum):
     NORMALMAPPED_TILED = 24
     NORMALMAPPED_ENVMAPPED = 26
     NORMALMAPPED = 27
+    NORMALMAPPED_GLOSSMAPPED = 28
     NORMALMAPPED_TILED_ENVMAP = 29
 
     # Placeholders to avoid crashes/import-export inconsistencies
     OTHER_1 = 1
     OTHER_2 = 2
-    OTHER_4 = 4
     OTHER_5 = 5
     OTHER_8 = 8
     OTHER_9 = 9
@@ -39,7 +40,6 @@ class Rendertype(Enum):
     OTHER_20 = 20
     OTHER_21 = 21
     OTHER_23 = 23
-    OTHER_28 = 28
     OTHER_30 = 30
     OTHER_31 = 31
 
