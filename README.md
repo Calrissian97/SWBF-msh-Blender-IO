@@ -6,6 +6,9 @@
 - BF1 Shadow Volumes (SHDW) chunk importing/exporting, see the [Shadow Volume section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#shadow-volumes)
 - Duplicate vertices are merged while preserving custom normals where possible.
 - Scene names are read from the MSH and the Blender scene name is set accordingly. It is preserved upon exporting.
+- Refraction, Blink, Envmap, Glossmap rendertype support.
+- Case-insensitive texture searching, ".tga" extension appended if missing.
+- Doublesided flag is assumed with blended transparency, unless Hardedged flag is also present.
 - This fork also provides support for Blender 5.0+ by updating animation import/export.
 
 ### Installing
