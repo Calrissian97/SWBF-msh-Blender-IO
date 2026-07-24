@@ -20,6 +20,9 @@ UI_RENDERTYPE_ENV_MAP_DESC = \
     "Specular Colour. And if Specular Material Flag is checked then " \
     "reflections will be affected by the Gloss Map."
 
+UI_RENDERTYPE_GLOSS_MAP_DESC = \
+    "Uses alpha channel of diffuse or normal/bump maps to enable and adjust intensity of specular highlights."
+
 UI_RENDERTYPE_NORMAL_MAP_DESC = \
     "Enables the use of a Normal Map with the material."
 
@@ -98,6 +101,12 @@ UI_RENDERTYPE_NORMALMAPPED_ENVMAPPED_BF2_DESC = f"""\
 {UI_RENDERTYPE_DETAIL_MAP_DESC} {UI_RENDERTYPE_DETAIL_MAP_TILING_DESC}
 
 {UI_RENDERTYPE_NORMAL_PER_PIXEL_DESC}
+"""
+
+UI_RENDERTYPE_NORMALMAPPED_GLOSSMAPPED_BF2_DESC = f"""\
+{UI_RENDERTYPE_NORMAL_MAP_DESC}
+
+{UI_RENDERTYPE_GLOSS_MAP_DESC}
 """
 
 UI_RENDERTYPE_NORMALMAPPED_TILED_ENVMAPPED_BF2_DESC = f"""\
