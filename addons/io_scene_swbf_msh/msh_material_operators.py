@@ -303,26 +303,26 @@ class GenerateMaterialNodesFromSWBFProperties(bpy.types.Operator):
 
             surface_output_nodes.append(('BSDF', bsdf))
 
-            if not is_emissive:
-                if mat_props.hardedged_transparency:
-                    material.blend_method = "CLIP"
-                    material.node_tree.links.new(bsdf.inputs['Alpha'], texImage.outputs['Alpha'])
-                elif mat_props.blended_transparency or mat_props.doublesided or is_refraction:
-                    material.blend_method = "BLEND" 
-                    material.node_tree.links.new(bsdf.inputs['Alpha'], texImage.outputs['Alpha'])
-                elif mat_props.additive_transparency:
+            # Handle transparency
+            if mat_props.hardedged_transparency:
+                material.blend_method = "CLIP"
+                material.node_tree.links.new(bsdf.inputs['Alpha'], texImage.outputs['Alpha'])
+            elif mat_props.blended_transparency or mat_props.doublesided or is_refraction:
+                material.blend_method = "BLEND" 
+                material.node_tree.links.new(bsdf.inputs['Alpha'], texImage.outputs['Alpha'])
+            elif mat_props.additive_transparency:
 
-                    # most complex 
-                    transparent_bsdf = material.node_tree.nodes.new("ShaderNodeBsdfTransparent")
-                    add_shader = material.node_tree.nodes.new("ShaderNodeAddShader")
+                # most complex 
+                transparent_bsdf = material.node_tree.nodes.new("ShaderNodeBsdfTransparent")
+                add_shader = material.node_tree.nodes.new("ShaderNodeAddShader")
 
-                    material.node_tree.links.new(add_shader.inputs[0], bsdf.outputs["BSDF"])
-                    material.node_tree.links.new(add_shader.inputs[1], transparent_bsdf.outputs["BSDF"])
+                material.node_tree.links.new(add_shader.inputs[0], bsdf.outputs["BSDF"])
+                material.node_tree.links.new(add_shader.inputs[1], transparent_bsdf.outputs["BSDF"])
 
-                    surface_output_nodes[0] = ('Shader', add_shader)
+                surface_output_nodes[0] = ('Shader', add_shader)
 
             # Glow/Unlit (adds another shader output)
-            else:
+            if is_emissive:
                 emission = material.node_tree.nodes.new("ShaderNodeEmission")
                 material.node_tree.links.new(emission.inputs['Color'], texImage.outputs['Color']) 
 
