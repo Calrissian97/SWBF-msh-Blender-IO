@@ -26,21 +26,25 @@ class MungeOptions:
                     self.options[current_parameter] += part if not current_value else (" " + part)
 
     def is_option_present(self, param):
-        return param in self.options
+        return param.lower() in (key.lower() for key in self.options)
+
 
     def get_bool(self, param, default=False):
-        return True if param in self.options else default
+        return param.lower() in (key.lower() for key in self.options) or default
+
 
     def get_float(self, param, default=0.0):
-        if param in self.options:
-            try:
-                result = float(self.options[param]) 
-            except:
-                result = default
-            finally:
-                return result
-        else:
-            return default
+        for key, value in self.options.items():
+            if key.lower() == param.lower():
+                try:
+                    return float(value)
+                except:
+                    return default
+        return default
+
 
     def get_string(self, param, default=""):
-        return self.options.get(param, default)
+        for key, value in self.options.items():
+            if key.lower() == param.lower():
+                return value
+        return default
