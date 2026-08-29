@@ -131,6 +131,15 @@ def extract_models(scene: Scene, materials_map : Dict[str, bpy.types.Material]) 
         apply_transform(new_obj, model.transform)
         if model.collisionprimitive is not None:
             new_obj.swbf_msh_coll_prim.prim_type = model.collisionprimitive.shape.value
+            shapeStr = ''
+            if model.collisionprimitive.shape.value == 0:
+                shapeStr = 'sphere'
+            elif model.collisionprimitive.shape.value == 2:
+                shapeStr = 'cylinder'
+            else:
+                shapeStr = 'cube'
+
+            new_obj["swbf_msh_collision_primitive_shape"] = str(shapeStr)
 
         bpy.context.collection.objects.link(new_obj)
 
@@ -259,10 +268,26 @@ def extract_scene(filepath: str, scene: Scene):
 
         armature.matrix_world = Matrix.Identity(4)        
     
-
-    
     for model in scene.models:
-        # Lastly, hide all that is hidden in the msh scene
+        # Assign custom shape prop if cloth collision prim
+        if model.cloth:
+            prims = model.cloth.collision_objects
+            for prim in prims:
+                if prim.name in model_map:
+                    prim_obj = model_map[prim.name]
+                    shape = prim_obj.get("swbf_msh_cloth_collision_primitive_shape", False)
+                    if not shape:
+                        shapeStr = ''
+                        if prim.shape.value == 0:
+                            shapeStr = 'sphere'
+                        elif prim.shape.value == 1:
+                            shapeStr = 'cylinder'
+                        else:
+                            shapeStr = 'cube'
+                        prim_obj["swbf_msh_cloth_collision_primitive_shape"] = str(shapeStr)
+        
         if model.name in model_map:
             obj = model_map[model.name]
+            
+            # Hide if supposed to be hidden
             obj.hide_set(model.hidden or get_is_model_hidden(obj))
