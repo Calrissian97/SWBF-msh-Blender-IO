@@ -722,6 +722,15 @@ def get_collision_primitive_shape(obj: bpy.types.Object) -> CollisionPrimitiveSh
     if prim_type in [item.value for item in CollisionPrimitiveShape]:
         return CollisionPrimitiveShape(prim_type)
 
+    shape = obj.get("swbf_msh_collision_primitive_shape", False)
+    if shape:
+        if shape == 'sphere':
+            return CollisionPrimitiveShape.SPHERE
+        elif shape == 'cylinder':
+            return CollisionPrimitiveShape.CYLINDER
+        elif shape == 'cube':
+            return CollisionPrimitiveShape.BOX
+
     name = obj.name.lower()
 
     if "sphere" in name or "sphr" in name or "spr" in name:
@@ -737,6 +746,16 @@ def get_collision_primitive_shape(obj: bpy.types.Object) -> CollisionPrimitiveSh
 def get_cloth_collision_primitive_shape(obj: bpy.types.Object) -> ClothCollisionPrimitiveShape:
     """ Gets the ClothCollisionPrimitiveShape of an object or raises an error if
         it can't. """
+
+    # Straightforward way if imported
+    shape = obj.get("swbf_msh_cloth_collision_primitive_shape", False)
+    if shape:
+        if shape == 'sphere':
+            return ClothCollisionPrimitiveShape.SPHERE
+        elif shape == 'cylinder':
+            return ClothCollisionPrimitiveShape.CYLINDER
+        elif shape == 'cube':
+            return ClothCollisionPrimitiveShape.BOX
 
     name = obj.name.lower()
 
