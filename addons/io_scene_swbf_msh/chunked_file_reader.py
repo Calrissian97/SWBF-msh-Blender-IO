@@ -57,37 +57,13 @@ class Reader:
 
 
     def read_string(self):
-        result = bytearray()
-        bytes_read = 0
-
-        # Read characters until first null terminator
-        while True:
-            b = self.read_bytes(1)
-            if not b:
-                break  # EOF safety
-
-            bytes_read += 1
-
-            if b[0] == 0x00:
-                break  # end of string
-            result.append(b[0])
-
-        # Read padding nulls ONLY until total size is 4-byte aligned
-        while bytes_read % 4 != 0:
-            b = self.read_bytes(1)
-            if not b:
-                break
-
-            if b[0] != 0x00:
-                # This null was the terminator, but this non-null is NOT padding.
-                # Seek back so the next field reads correctly.
-                self.file.seek(-1, 1)
-                break
-
-            bytes_read += 1  # count padding nulls
+        last_byte = self.read_bytes(1)
+        result = b''
+        while last_byte[0] != 0x0:
+            result += last_byte
+            last_byte = self.read_bytes(1)
 
         return result.decode("utf-8")
-
 
     def read_i8(self, num=1):
         buf = self.read_bytes(num)
