@@ -378,11 +378,17 @@ def _read_clth(clth_reader: Reader, model_name: str) -> Cloth:
                 for _ in range(count):
                     name = coll.read_string()
                     parent = coll.read_string()
-                    shape = ClothCollisionPrimitiveShape(coll.read_u32())
-                    radius = coll.read_f32()
-                    height = coll.read_f32()
-                    length = coll.read_f32()
-                    cloth.collision_objects.append(ClothCollisionPrimitive(name, parent, shape, radius, height, length))
+                    raw_shape = coll.read_u32()
+                    shape = ClothCollisionPrimitiveShape(0)
+                    if raw_shape >= 0 and raw_shape <= 2:
+                        shape = ClothCollisionPrimitiveShape(raw_shape)
+                        radius = coll.read_f32()
+                        height = coll.read_f32()
+                        length = coll.read_f32()
+                        cloth.collision_objects.append(ClothCollisionPrimitive(name, parent, shape, radius, height, length))
+                    else:
+                        print("Error parsing shape from cloth collision primitive. Name: ", name, " Parent: ", parent, " Read value: ", str(raw_shape))
+                        break
 
         else:
             clth_reader.skip_bytes(1)
