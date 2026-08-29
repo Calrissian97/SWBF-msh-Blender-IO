@@ -9,6 +9,7 @@
 - Refraction, Blink, Envmap, Glossmap rendertype support.
 - Case-insensitive texture searching, ".tga" extension appended if missing.
 - Doublesided flag is assumed with blended transparency, unless Hardedged flag is also present.
+- Primitive naming conventions no longer required for shape detection, see [Collision Primitive section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#collision-primitives)
 - This fork also provides support for Blender 5.0+ by updating animation import/export.
 
 ### Installing
