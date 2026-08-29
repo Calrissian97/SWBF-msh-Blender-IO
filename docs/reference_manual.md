@@ -264,7 +264,7 @@ In the context of the addon, a few rules apply in order to export a mesh as a cl
 
 SWBF2 uses cloth collision primitives, not unlike regular [Collision Primitives](#collision-primitives) with a few key differences:
 - Cloth collision primitives may be a Cube, UV Sphere, or Ico Sphere with unmodified topology (transforms and scaling only).
-- Cloth collision naming conventions require the name of the model to start with "c_" as opposed to "p_" for normal collision primitives. while normal collision primitives expect "sphere", "cylinder", "cube", etc. in their name, cloth collisions follow the convention of being named after the bone they're parented to, e.g., "c_pelvis". The addon *will* accept regular collision primitive shape type naming conventions as well though ingame results are not guaranteed. As a last resort, a heuristic calculation will be run to determine if the mesh is spherical, cuboid, or cylindrical based on the geometry (Do NOT rely on this, please try to follow the c_boneName or c_shapeType naming conventions).
+- Cloth collision naming conventions require the name of the model to start with "c_" as opposed to "p_" for normal collision primitives. While normal collision primitives expect "sphere", "cylinder", "cube", etc. in their name, cloth collisions follow the convention of being named after the bone they're parented to, e.g., "c_pelvis". A custom string property "swbf_msh_cloth_collision_primitive_shape" can be set on the cloth collision object with a value of 'sphere', 'cylinder', or 'cube' to override shape detection by name. As a last resort, a heuristic calculation will be run to determine if the mesh is spherical, cuboid, or cylindrical based on the geometry (Do NOT rely on this, please try to follow the c_boneName or c_shapeType naming conventions).
 
 Cloth collision primitives can be parented similarly to the cloth mesh, with it's parent the Armature and Parent Bone set to the bone it should move with (default importer behavior), or simply parented to the dummyroot or any msh scene object. It should also be noted that they should not have their transforms or scaling applied or they will simply match the transform and scale of the dummyroot upon export, just like regular collision primitives.
 
@@ -317,13 +317,15 @@ In order to provide support for exporting them the addon requires you to follow 
 
 First all collision primitive objects must start with "P_", this let's the addon know the object is a collision primitive.
 
-Next the object must contain one of the below strings in "Possible Name" column to let the addon know the shape it should use for the primitive. So "p_hitbox" would define a box primitive, whereas "p_icosphere_crithit" would define a sphere primitive.
+Next the object should contain one of the below strings in "Possible Name" column to let the addon know the shape it should use for the primitive. So "p_hitbox" would define a box primitive, whereas "p_icosphere_crithit" would define a sphere primitive.
 
 | Type     | Possible Name               |
 |:--------:|:---------------------------:|
 | sphere   | "sphere", "sphr" or "spr"   |
 | cylinder | "cylinder", "cyln" or "cyl" |
 | box      | "box", "cube" or "cuboid"   |
+
+**Note: A custom string property called "swbf_msh_collision_primitive_shape" may be set with values 'sphere', 'cylinder', or 'cube' to the collision primitive object to override shape detection by name.**
 
 Finally the addon will grab the dimensions of the object and use those as the size of primitive. If the dimenions do not make sense for a primitive type (for instance if the dimensions of a sphere indicate would define it as an ellipsoid) then an error will be raised on export in order to prevent you exporting collision that does not match your visual representation of it.  
 
