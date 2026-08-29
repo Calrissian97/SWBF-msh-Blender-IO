@@ -75,7 +75,7 @@ class GeometrySegment:
 @dataclass
 class CollisionPrimitive:
     """ Class representing a 'SWCI' section in a .msh file. """
-    shape: CollisionPrimitiveShape = CollisionPrimitiveShape.SPHERE
+    shape: CollisionPrimitiveShape = None
     radius: float = 0.0
     height: float = 0.0
     length: float = 0.0
@@ -86,7 +86,7 @@ class ClothCollisionPrimitive:
     """ Class representing a 'COLL' section item in a .msh file. """
     name: str = ""
     parent_name: str = ""
-    shape: ClothCollisionPrimitiveShape = ClothCollisionPrimitiveShape.SPHERE
+    shape: ClothCollisionPrimitiveShape = None
     radius: float = 0.0
     height: float = 0.0
     length: float = 0.0
