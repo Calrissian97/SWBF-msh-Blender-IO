@@ -443,6 +443,15 @@ def _read_segm(segm: Reader, materials_list: List[Material]) -> GeometrySegment:
                 for _ in range(num_colors):
                     geometry_seg.colors += unpack_color(clrl.read_u32())
 
+        elif next_header == "CLRB":
+            geometry_seg.colors = []
+
+            with segm.read_child() as clrb:
+                color = unpack_color(clrb.read_u32())
+
+                for _ in range(num_positions):
+                    geometry_seg.colors += color
+
         elif next_header == "UV0L":
             with segm.read_child() as uv0l:
                 num_texcoords = uv0l.read_u32()
