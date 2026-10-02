@@ -482,10 +482,6 @@ class GenerateMaterialNodesFromSWBFProperties(bpy.types.Operator):
             output = material.node_tree.nodes.new("ShaderNodeOutputMaterial")
             material.node_tree.links.new(output.inputs['Surface'], surfaces_output.outputs[0]) 
 
-            # Scrolling
-            # This approach works 90% of the time, but notably produces very incorrect results
-            # on mus1_bldg_world_1,2,3
-
             # Clear all anims in all cases
             if material.node_tree.animation_data:
                 material.node_tree.animation_data_clear()
@@ -547,6 +543,9 @@ class GenerateMaterialNodesFromSWBFProperties(bpy.types.Operator):
                         f" * sin(frame * {radians_per_frame:.9g})"
                     )
 
+            # Scrolling
+            # This approach works 90% of the time, but notably produces very incorrect results
+            # on mus1_bldg_world_1,2,3
             if "SCROLL" in mat_props.rendertype:
                 uv_input = material.node_tree.nodes.new("ShaderNodeUVMap")
 
@@ -557,7 +556,7 @@ class GenerateMaterialNodesFromSWBFProperties(bpy.types.Operator):
                 frame_step = 60.0
                 fps = bpy.context.scene.render.fps
                 for i in range(2):
-                    vector_add.inputs[1].default_value[0] = i * mat_props.scroll_speed_u * frame_step / scroll_per_sec_divisor              
+                    vector_add.inputs[1].default_value[0] = -i * mat_props.scroll_speed_u * frame_step / scroll_per_sec_divisor              
                     vector_add.inputs[1].keyframe_insert("default_value", index=0, frame=i * frame_step * fps)
 
                     vector_add.inputs[1].default_value[1] = i * mat_props.scroll_speed_v * frame_step / scroll_per_sec_divisor               
