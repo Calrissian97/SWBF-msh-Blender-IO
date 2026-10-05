@@ -115,19 +115,23 @@ def _write_matd(matd: Writer, material_name: str, material: Material):
         atrb.write_u8(material.rendertype.value)
         atrb.write_u8(material.data[0], material.data[1])
 
-    with matd.create_child("TX0D") as tx0d:
-        tx0d.write_string(material.texture0)
+    if len(material.texture0) > 4:
+        with matd.create_child("TX0D") as tx0d:
+            tx0d.write_string(material.texture0)
     if material.texture1 or material.texture2 or material.texture3:
-        with matd.create_child("TX1D") as tx1d:
-            tx1d.write_string(material.texture1)
+        if len(material.texture1) > 4:
+            with matd.create_child("TX1D") as tx1d:
+                tx1d.write_string(material.texture1)
 
         if material.texture2 or material.texture3:
-            with matd.create_child("TX2D") as tx2d:
-                tx2d.write_string(material.texture2)
+            if len(material.texture2) > 4:
+                with matd.create_child("TX2D") as tx2d:
+                    tx2d.write_string(material.texture2)
 
         if material.texture3:
-            with matd.create_child("TX3D") as tx3d:
-                tx3d.write_string(material.texture3)
+            if len(material.texture3) > 4:
+                with matd.create_child("TX3D") as tx3d:
+                    tx3d.write_string(material.texture3)
 
 
 def _write_modl(modl: Writer, model: Model, index: int, material_index: Dict[str, int], model_index: Dict[str, int]):
