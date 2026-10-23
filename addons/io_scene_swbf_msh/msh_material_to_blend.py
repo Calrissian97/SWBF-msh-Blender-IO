@@ -8,8 +8,6 @@ from .msh_material import *
 
 from .msh_material_utilities import _REVERSE_RENDERTYPES_MAPPING
 
-from math import sqrt
-
 import os
 
 
@@ -104,13 +102,13 @@ def _fill_material_props_data(material, material_properties):
     material_properties.normal_map_tiling_u = material.data[0]
     material_properties.normal_map_tiling_v = material.data[1]
 
-    anim_length_index = int(sqrt(material.data[0]))
-    if anim_length_index < 0:
-        anim_length_index = 0
-    elif anim_length_index >= len(UI_MATERIAL_ANIMATION_LENGTHS):
-        anim_length_index = len(UI_MATERIAL_ANIMATION_LENGTHS) - 1
-
-    material_properties.animation_length = UI_MATERIAL_ANIMATION_LENGTHS[anim_length_index][0]
+    animation_length_id = f"FRAMES_{material.data[0]}"
+    valid_animation_length_ids = {entry[0] for entry in UI_MATERIAL_ANIMATION_LENGTHS}
+    material_properties.animation_length = (
+        animation_length_id
+        if animation_length_id in valid_animation_length_ids
+        else UI_MATERIAL_ANIMATION_LENGTHS[0][0]
+    )
     material_properties.animation_speed = material.data[1]
 
     material_properties.detail_map_tiling_u = material.data[0]
