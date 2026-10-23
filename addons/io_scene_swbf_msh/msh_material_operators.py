@@ -567,6 +567,53 @@ class GenerateMaterialNodesFromSWBFProperties(bpy.types.Operator):
                 for texture_node in texture_input_nodes:
                     material.node_tree.links.new(texture_node.inputs["Vector"], vector_add.outputs[0])
 
+            # Animated textures are arranged in a square grid, with frames
+            # ordered from the top left to the bottom right.
+            if "ANIMATED" in mat_props.rendertype:
+                frame_count = int(str(mat_props.animation_length).split("_")[1])
+                frames_per_side = int(sqrt(frame_count))
+
+                if frames_per_side * frames_per_side != frame_count:
+                    self.report(
+                        {'WARNING'},
+                        f"Animation frame count {frame_count} is not a square!")
+                else:
+                    uv_input = material.node_tree.nodes.new("ShaderNodeUVMap")
+
+                    frame_offset = material.node_tree.nodes.new("ShaderNodeVectorMath")
+                    frame_offset.label = "SWBF Animation Frame Offset"
+                    # SWBF meshes are already mapped to the first cell, so
+                    # preserve their UVs and move that cell through the sheet.
+                    material.node_tree.links.new(frame_offset.inputs[0], uv_input.outputs[0])
+
+                    # Drivers keep the animation looping and, unlike interpolated
+                    # keyframes, switch directly between complete texture frames.
+                    frames_per_second = max(1.0, context.scene.render.fps)
+                    frame_expression = (
+                        f"(floor(frame * {mat_props.animation_speed:.9g} / "
+                        f"{frames_per_second:.9g}) % {frame_count})")
+                    for index, expression in enumerate((
+                        f"({frame_expression} % {frames_per_side}) / {frames_per_side}",
+                        f"1.0 - (floor({frame_expression} / {frames_per_side}) + 1.0) / {frames_per_side}",
+                    )):
+                        offset_fcurve = frame_offset.inputs[1].driver_add(
+                            "default_value", index)
+                        offset_driver = offset_fcurve.driver
+                        offset_driver.type = 'SCRIPTED'
+
+                        frame_variable = offset_driver.variables.new()
+                        frame_variable.name = "frame"
+                        frame_variable.type = 'SINGLE_PROP'
+                        frame_variable.targets[0].id_type = 'SCENE'
+                        frame_variable.targets[0].id = context.scene
+                        frame_variable.targets[0].data_path = "frame_current"
+                        offset_driver.expression = expression
+
+                    for texture_node in texture_input_nodes:
+                        material.node_tree.links.new(
+                            texture_node.inputs["Vector"],
+                            frame_offset.outputs[0])
+
             # Don't know how to set interpolation when adding keyframes
             # so we must do it after the fact
             if material.node_tree.animation_data and material.node_tree.animation_data.action:
