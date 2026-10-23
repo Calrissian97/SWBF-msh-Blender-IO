@@ -6,7 +6,7 @@
 - BF1 Shadow Volumes (SHDW) chunk importing/exporting, see the [Shadow Volume section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#shadow-volumes)
 - Duplicate vertices are merged while preserving custom normals where possible.
 - Scene names are read from the MSH and the Blender scene name is set accordingly. It is preserved upon exporting.
-- Refraction, Blink, Envmap, Glossmap rendertype support.
+- Refraction, Blink, Envmap, Glossmap, and Animated rendertype support.
 - Case-insensitive texture searching, ".tga" extension appended if missing.
 - Doublesided flag is assumed with blended transparency, unless Hardedged flag is also present.
 - Primitive naming conventions no longer required for shape detection, see [Collision Primitive section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#collision-primitives)
