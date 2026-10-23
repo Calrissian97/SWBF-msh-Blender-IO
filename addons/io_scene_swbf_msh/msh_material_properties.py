@@ -37,7 +37,6 @@ def _make_anim_length_entry(length):
         f"Input texture should be laid out as {len_sqrt}x{len_sqrt} frames.")
 
 UI_MATERIAL_ANIMATION_LENGTHS = (
-    ('FRAMES_1', "1 (1x1)", "Why do you have an animated texture with one frame?"),
     _make_anim_length_entry(4),
     _make_anim_length_entry(9),
     _make_anim_length_entry(16),
@@ -152,8 +151,8 @@ class MaterialProperties(PropertyGroup):
     animation_speed: IntProperty(name="Animation Speed",
                                  description="Animation speed in frames per second.",
                                  default=1,
-                                 min=0, max=255,
-                                 soft_min=0, soft_max=255)
+                                 min=1, max=255,
+                                 soft_min=1, soft_max=255)
 
     blink_min_brightness: IntProperty(name="Blink Minimum Brightness",
                                       description="Minimum brightness to blink between.",
