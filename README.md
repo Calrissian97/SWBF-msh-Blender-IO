@@ -4,13 +4,14 @@
 ### Changes from Original
 - This fork of PrismaticFlower's addon adds support for importing/exporting cloth, see the [Cloth section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#cloth) of the reference manual for details.
 - BF1 Shadow Volumes (SHDW) chunk importing/exporting, see the [Shadow Volume section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#shadow-volumes)
+- Bone transforms are converted to/from Blender's and the MSH format's axes, allowing for conventional bone posing and editing.
 - Duplicate vertices are merged while preserving custom normals where possible.
 - Scene names are read from the MSH and the Blender scene name is set accordingly. It is preserved upon exporting.
 - Refraction, Blink, Envmap, Glossmap, and Animated rendertype support.
 - Case-insensitive texture searching, ".tga" extension appended if missing.
 - Doublesided flag is assumed with blended transparency, unless Hardedged flag is also present.
 - Primitive naming conventions no longer required for shape detection, see [Collision Primitive section](https://github.com/Calrissian97/SWBF-msh-Blender-IO/blob/master/docs/reference_manual.md#collision-primitives)
-- Full vertex colors (CLRB) chunk importing
+- Full vertex colors (CLRB chunk) importing
 - This fork also provides support for Blender 5.0+ by updating animation import/export.
 
 ### Installing
