@@ -99,7 +99,7 @@ def gather_models(apply_modifiers: bool, export_target: str, skeleton_only: bool
                 # matrix_local, when called on an armature child also parented to a bone, appears to be broken.
                 # At the very least, the results contradict the docs...  
                 armature_relative_transform = obj.parent.matrix_world.inverted() @ obj.matrix_world
-                transform = obj.parent.data.bones[obj.parent_bone].matrix_local.inverted() @ armature_relative_transform 
+                transform = calculate_swbf_bone_matrix(obj.parent.data.bones[obj.parent_bone]).inverted() @ armature_relative_transform
 
             else:
                 if obj.parent is not None:
@@ -638,6 +638,8 @@ def get_is_model_hidden(obj: bpy.types.Object) -> bool:
         return True
     if name.startswith("collision"):
         return True
+    if name.startswith("hp_"):
+        return True
 
     if obj.type not in MESH_OBJECT_TYPES:
         return True
@@ -865,10 +867,10 @@ def expand_armature(armature: bpy.types.Object) -> Dict[str, Model]:
     for bone in armature.data.bones:
         model = Model()
 
-        transform = bone.matrix_local
+        transform = calculate_swbf_bone_matrix(bone)
 
         if bone.parent:
-            transform = bone.parent.matrix_local.inverted() @ transform
+            transform = calculate_swbf_bone_matrix(bone.parent).inverted() @ transform
             model.parent = bone.parent.name
         # If the bone has no parent_bone:
         #   set model parent to SKIN object if there is one
