@@ -12,7 +12,7 @@ from .msh_model import *
 from .msh_model_utilities import *
 
 from .crc import *
-
+from .msh_bone_transforms import create_bone_hierarchy, create_bone_collections
 
 '''
 Creates armature from the required nodes.  
@@ -52,29 +52,17 @@ def required_skeleton_to_armature(required_skeleton : List[Model], model_map : D
         edit_bone.matrix = bone_obj.matrix_world
         edit_bone.tail = bone_obj.matrix_world @ Vector((0.0,1.0,0.0))
 
-        bone_children = [b for b in get_model_children(bone, required_skeleton)]
-        
-        '''
-        Perhaps we'll add an option for importing bones tip-to-tail, but that would 
-        require preserving their original transforms as changing the tail position
-        changes the bones' transform...
-        '''
-        tail_pos = Vector()
-        if bone_children:
-            for bone_child in bone_children:
-                tail_pos += bone_obj.matrix_world.translation
-            tail_pos = tail_pos / len(bone_children) 
-            edit_bone.length = .5 #(tail_pos - edit_bone.head).magnitude
-        else:
-            bone_length = .5# edit_bone.parent.length if edit_bone.parent is not None else .5
-            edit_bone.tail = bone_obj.matrix_world @ Vector((0.0,bone_length,0.0))
+        edit_bone.length = 0.5
+
+    create_bone_hierarchy(armature) # Create clean bone hierarchy, assigning offset properties to bones
 
     bpy.ops.object.mode_set(mode='OBJECT')
+
+    create_bone_collections(armature)   # Create convenient bone collections for neater editing
     armature_obj.select_set(True)
     bpy.context.view_layer.update() 
 
     return armature_obj
-
 
 
 
@@ -112,7 +100,7 @@ def extract_required_skeleton(scene: Scene) -> List[Model]:
         model_dict[model.name] = model
 
         if model.model_type == ModelType.BONE:
-            skeleton_hashes.add(to_crc(model.name))    
+            skeleton_hashes.add(to_crc(model.name))
 
         elif model.geometry:
             for seg in model.geometry:
@@ -169,6 +157,7 @@ def extract_required_skeleton(scene: Scene) -> List[Model]:
             # Add ancestor to potential bones, update next ancestor
             else:
                 if curr_ancestor.name not in visited_nodes:
+                    print("Required ancestor:", curr_ancestor.name, "for:", bone.name)
                     potential_bones.insert(0, curr_ancestor)
                 curr_ancestor = model_dict[curr_ancestor.parent]
                 
