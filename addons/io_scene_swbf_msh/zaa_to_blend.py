@@ -232,6 +232,8 @@ for now this will work ONLY if the model was directly imported from a .msh file.
 
 def extract_and_apply_munged_anim(input_file_path):
 
+    from .msh_bone_transforms import get_swbf_bone_axis_offset
+
     global debug
 
     with open(input_file_path,"rb") as input_file:
@@ -285,7 +287,8 @@ def extract_and_apply_munged_anim(input_file_path):
         else:
             bind_mat = arma.matrix_local @ edit_bone.matrix
 
-        bone_bind_poses[edit_bone.name] = bind_mat.inverted()
+        parent_offset = get_swbf_bone_axis_offset(curr_ancestor) if curr_ancestor else Matrix.Identity(4)
+        bone_bind_poses[edit_bone.name] = bind_mat.inverted() @ parent_offset
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -331,6 +334,7 @@ def extract_and_apply_munged_anim(input_file_path):
                 continue;
 
             bind_mat = bone_bind_poses[bone.name]
+            axis_inverse = get_swbf_bone_axis_offset(bone.bone).inverted()
             loc_data_path = "pose.bones[\"{}\"].location".format(bone.name) 
             rot_data_path = "pose.bones[\"{}\"].rotation_quaternion".format(bone.name) 
 
@@ -425,7 +429,7 @@ def extract_and_apply_munged_anim(input_file_path):
                         print("\t\t\tRot key: ({}, {})".format(frame, quat_to_str(q)))
 
                     # Very bloated, but works for now
-                    q = (bind_mat @ convert_rotation_space(q).to_matrix().to_4x4()).to_quaternion()
+                    q = (bind_mat @ convert_rotation_space(q).to_matrix().to_4x4() @ axis_inverse).to_quaternion()
                     fcurve_rot_w.keyframe_points.insert(frame,q.w)
                     fcurve_rot_x.keyframe_points.insert(frame,q.x)
                     fcurve_rot_y.keyframe_points.insert(frame,q.y)
