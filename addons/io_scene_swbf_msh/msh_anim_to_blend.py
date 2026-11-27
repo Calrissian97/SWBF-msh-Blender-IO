@@ -18,6 +18,7 @@ from .msh_mesh_to_blend import model_to_mesh_object
 
 
 from .crc import *
+from .msh_bone_transforms import get_swbf_bone_axis_offset
 
 import os
 
@@ -63,7 +64,8 @@ def extract_and_apply_anim(filename : str, scene : Scene):
             else:
                 bone_local = arma.matrix_local @ edit_bone.matrix
 
-            bone_bind_poses[edit_bone.name] = bone_local.inverted()
+            parent_offset = get_swbf_bone_axis_offset(edit_bone.parent) if edit_bone.parent else Matrix.Identity(4)
+            bone_bind_poses[edit_bone.name] = bone_local.inverted() @ parent_offset
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -72,6 +74,7 @@ def extract_and_apply_anim(filename : str, scene : Scene):
             if to_crc(bone.name) in scene.animation.bone_frames:
 
                 bind_mat = bone_bind_poses[bone.name]
+                axis_inverse = get_swbf_bone_axis_offset(bone.bone).inverted()
 
                 translation_frames, rotation_frames = scene.animation.bone_frames[to_crc(bone.name)]
 
@@ -111,7 +114,7 @@ def extract_and_apply_anim(filename : str, scene : Scene):
 
                 for frame in rotation_frames:
                     i = frame.index
-                    q = (bind_mat @ convert_rotation_space(frame.rotation).to_matrix().to_4x4()).to_quaternion()
+                    q = (bind_mat @ convert_rotation_space(frame.rotation).to_matrix().to_4x4() @ axis_inverse).to_quaternion()
 
                     fcurve_rot_w.keyframe_points.insert(i,q.w)
                     fcurve_rot_x.keyframe_points.insert(i,q.x)
