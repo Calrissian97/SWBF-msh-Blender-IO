@@ -13,7 +13,7 @@ from .msh_model_gather import *
 from .msh_skeleton_utilities import *
 
 from .crc import to_crc
-
+from .msh_bone_transforms import get_swbf_bone_axis_offset
 
 '''
 Convert the active Action into an Animation.  When exported SWBF anims, there is the issue
@@ -83,10 +83,10 @@ def extract_anim(armature: bpy.types.Armature, root_name: str) -> Animation:
 
                 bone = armature.pose.bones[keyable_bone]
 
-                transform = bone.matrix
+                transform = bone.matrix @ get_swbf_bone_axis_offset(bone.bone)
 
                 if bone.parent:
-                    transform = bone.parent.matrix.inverted() @ transform
+                    transform = (bone.parent.matrix @ get_swbf_bone_axis_offset(bone.parent.bone)).inverted() @ transform
      
                 loc, rot, _ = transform.decompose()
 
