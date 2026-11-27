@@ -10,11 +10,11 @@ from .msh_model import *
 from .msh_model_utilities import *
 
 from .crc import *
-
+from .msh_bone_transforms import calculate_swbf_bone_matrix
 
 def get_bone_world_matrix(armature: bpy.types.Object, bone_name: str) -> Matrix:
     if bone_name in armature.data.bones:
-        return armature.matrix_world @ armature.data.bones[bone_name].matrix_local
+        return armature.matrix_world @ calculate_swbf_bone_matrix(armature.data.bones[bone_name])
     else:
         return None
 
